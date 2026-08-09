@@ -9,7 +9,8 @@ from app.api.resume import router as resume_router
 from app.api.company import router as company_router
 from app.api.agent import router as agent_router
 from app.api.memory import router as memory_router
-from app.api.mcp import router as mcp_router
+from app.api.interview import router as interview_router
+from app.api.applications import router as application_router
 from app.api.analytics import router as analytics_router
 
 @asynccontextmanager
@@ -40,7 +41,8 @@ app.include_router(resume_router, prefix=settings.API_V1_STR)
 app.include_router(company_router, prefix=settings.API_V1_STR)
 app.include_router(agent_router, prefix=settings.API_V1_STR)
 app.include_router(memory_router, prefix=settings.API_V1_STR)
-app.include_router(mcp_router, prefix=settings.API_V1_STR)
+app.include_router(interview_router, prefix=settings.API_V1_STR)
+app.include_router(application_router, prefix=settings.API_V1_STR)
 app.include_router(analytics_router, prefix=settings.API_V1_STR)
 
 @app.get("/")

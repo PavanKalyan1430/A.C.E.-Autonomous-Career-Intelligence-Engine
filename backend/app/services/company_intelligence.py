@@ -3,6 +3,7 @@ import json
 import os
 from tavily import TavilyClient
 from app.core.config import settings
+from app.services.nlp_service import production_nlp_service
 
 logger = logging.getLogger(__name__)
 
@@ -13,54 +14,54 @@ class CompanyIntelligenceService:
             self.client = TavilyClient(api_key=api_key)
         else:
             self.client = None
-            logger.warning("TAVILY_API_KEY not set. Running in mock company intelligence mode.")
+            logger.warning("TAVILY_API_KEY not set.")
 
     async def get_company_insights(self, company_name: str) -> dict:
-        if not self.client:
-            return self._mock_company_insights(company_name)
-            
-        try:
-            # Query tech stack and interview questions
-            query = f"{company_name} engineering tech stack interview process questions hiring trends"
-            response = self.client.search(query=query, max_results=5)
-            
-            # Formulate aggregated summary
-            results = response.get("results", [])
-            sources = [r.get("url") for r in results]
-            snippets = " ".join([r.get("content", "") for r in results])
-            
-            return {
-                "company_name": company_name,
-                "tech_stack": self._extract_skills_heuristics(snippets),
-                "interview_process": "Found insights on standard coding loops and system design stages.",
-                "hiring_trends": "Active hiring trends in engineering and cloud solutions.",
-                "sources": sources,
-                "raw_summary": snippets[:1000]
-            }
-        except Exception as e:
-            logger.error(f"Error fetching company intelligence via Tavily: {e}")
-            return self._mock_company_insights(company_name)
+        snippets = ""
+        sources = []
+        
+        if self.client:
+            try:
+                query = f"{company_name} engineering tech stack interview process questions hiring trends"
+                response = self.client.search(query=query, max_results=5)
+                results = response.get("results", [])
+                sources = [r.get("url") for r in results if r.get("url")]
+                snippets = " ".join([r.get("content", "") for r in results if r.get("content")])
+            except Exception as e:
+                logger.error(f"Error fetching live search via Tavily for {company_name}: {e}")
 
-    def _extract_skills_heuristics(self, text: str) -> list:
-        common_skills = [
-            "python", "javascript", "typescript", "golang", "java", "c++",
-            "react", "angular", "vue", "next.js", "fastapi", "django", "spring boot",
-            "aws", "gcp", "azure", "kubernetes", "docker", "postgresql", "redis", "mongodb"
-        ]
-        text_lower = text.lower()
-        extracted = [skill.title() for skill in common_skills if skill in text_lower]
-        return extracted if extracted else ["Python", "AWS", "React"]
+        # Extract dynamic TF-IDF keyphrases from live snippets
+        extracted_features = production_nlp_service.extract_tfidf_keyphrases(snippets, top_n=10) if snippets else []
+        dynamic_tech_stack = [item["keyphrase"] for item in extracted_features]
 
-    def _mock_company_insights(self, company_name: str) -> dict:
+        # Use Gemini LLM to synthesize live search snippets into structured insights
+        gemini_api_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY")
+        if gemini_api_key and snippets:
+            try:
+                from google import genai
+                client = genai.Client(api_key=gemini_api_key)
+                prompt = (
+                    f"Synthesize the following live web search snippets for {company_name}:\n{snippets}\n\n"
+                    f"Return JSON format with keys: 'tech_stack' (list of technologies), 'interview_process' (summary of coding/system design stages), "
+                    f"and 'hiring_trends' (current engineering focus areas)."
+                )
+                res = client.models.generate_content(
+                    model="gemini-1.5-flash",
+                    contents=prompt,
+                    config={"response_mime_type": "application/json"}
+                )
+                llm_data = json.loads(res.text)
+                llm_data["company_name"] = company_name
+                llm_data["sources"] = sources
+                return llm_data
+            except Exception as e:
+                logger.error(f"Error synthesizing search snippets via LLM: {e}")
+
         return {
             "company_name": company_name,
-            "tech_stack": ["React", "TypeScript", "Python", "FastAPI", "AWS", "PostgreSQL", "Docker"],
-            "interview_process": (
-                "1. Initial HR screening (30 mins)\n"
-                "2. Technical Screening: Live Coding (Leetcode medium) + System Design basics\n"
-                "3. Onsite/Virtual Loops: 2 Coding sessions, 1 System Design, 1 Behavioral round."
-            ),
-            "hiring_trends": "Strong emphasis on building AI integration platforms, cloud-native services, and robust security pipelines.",
-            "sources": ["https://glassdoor.com", "https://linkedin.com/jobs"],
-            "raw_summary": f"Mock data for {company_name} representing typical high-growth tech firms."
+            "tech_stack": dynamic_tech_stack,
+            "interview_process": snippets[:300] if snippets else "",
+            "hiring_trends": "",
+            "sources": sources,
+            "raw_summary": snippets[:1000] if snippets else ""
         }

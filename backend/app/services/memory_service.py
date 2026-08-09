@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from app.models.user import UserMemory
 
@@ -36,3 +36,32 @@ class MemoryService:
             .order_by(UserMemory.created_at.desc())
         )
         return list(result.scalars().all())
+
+    async def search_relevant_memories(
+        self, db: AsyncSession, user_id: int, query: str, top_k: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Uses SentenceTransformers dense vector embeddings to compute Cosine Distance 
+        and rank user memories by semantic relevance to the current query.
+        """
+        from app.services.nlp_service import production_nlp_service
+        
+        all_memories = await self.get_all_user_memories(db, user_id)
+        if not all_memories:
+            return []
+
+        scored_memories = []
+        for mem in all_memories:
+            sim_res = production_nlp_service.compute_semantic_similarity(query, mem.memory_text)
+            scored_memories.append({
+                "id": mem.id,
+                "category": mem.category,
+                "memory_text": mem.memory_text,
+                "relevance_score": sim_res["cosine_similarity_score"],
+                "match_percentage": sim_res["match_percentage"]
+            })
+
+        scored_memories.sort(key=lambda x: x["relevance_score"], reverse=True)
+        return scored_memories[:top_k]
+
+memory_service = MemoryService()

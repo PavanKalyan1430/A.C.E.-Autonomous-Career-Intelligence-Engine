@@ -1,22 +1,41 @@
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
 env/
 venv/
 .venv/
+backend/venv/
+backend/.venv/
 pip-log.txt
 pip-delete-this-directory.txt
 .tox/
 .coverage
+.coverage.*
 .cache
 nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
 .pytest_cache/
+
+# Node & Frontend
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+dist-ssr/
+*.local
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # Databases & Cache
 *.db
@@ -25,10 +44,17 @@ coverage.xml
 
 # Environment keys
 .env
-.env.local
+.env.*
+!.env.example
 
-# IDEs
+# OS & Editor files
+.DS_Store
+Thumbs.db
 .idea/
 .vscode/
 *.swp
 *.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln

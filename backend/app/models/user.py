@@ -1,7 +1,14 @@
 import datetime
+import enum
 from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, JSON, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
+
+class ApplicationStatus(str, enum.Enum):
+    APPLIED = "applied"
+    INTERVIEW = "interview"
+    OFFER = "offer"
+    REJECTED = "rejected"
 
 class User(Base):
     __tablename__ = "users"
@@ -21,6 +28,7 @@ class User(Base):
     memories: Mapped[list["UserMemory"]] = relationship("UserMemory", back_populates="user", cascade="all, delete-orphan")
     recommendations: Mapped[list["Recommendation"]] = relationship("Recommendation", back_populates="user", cascade="all, delete-orphan")
     executions: Mapped[list["AgentExecution"]] = relationship("AgentExecution", back_populates="user", cascade="all, delete-orphan")
+    chat_sessions: Mapped[list["ChatSession"]] = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
 
 class Profile(Base):
     __tablename__ = "profiles"
@@ -166,3 +174,33 @@ class AgentExecution(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
     user: Mapped["User"] = relationship("User", back_populates="executions")
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    title: Mapped[str] = mapped_column(String, default="New Conversation")
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    user: Mapped["User"] = relationship("User", back_populates="chat_sessions")
+    messages: Mapped[list["ChatMessage"]] = relationship(
+        "ChatMessage", back_populates="session", cascade="all, delete-orphan"
+    )
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    session_id: Mapped[int] = mapped_column(Integer, ForeignKey("chat_sessions.id"), nullable=False)
+    role: Mapped[str] = mapped_column(String, nullable=False)  # "user", "assistant", "system"
+    content: Mapped[str] = mapped_column(String, nullable=False)
+    agent_name: Mapped[str] = mapped_column(String, default="orchestrator")
+    meta_data: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+
+    session: Mapped["ChatSession"] = relationship("ChatSession", back_populates="messages")
+
