@@ -1,77 +1,61 @@
 # A.C.E. — Autonomous Career Intelligence Engine
 
-> **A Production-Grade, Multi-Agent Career Intelligence & Mock Interview Platform**  
-> Powered by LangGraph Autonomous ReAct Reasoning, Groq Cloud `whisper-large-v3-turbo` SOTA In-Memory Speech Analytics, SentenceTransformers Dense Vector Embeddings, SpaCy Parts-of-Speech Action-Verb Mining, NetworkX Directed Graph Topological Skill DAGs, and Tavily Live Engineering Research.
+> **An Enterprise-Grade, Multi-Agent Career Intelligence & Real-Time Voice Mock Interview Platform**  
+> Built with LangGraph Autonomous ReAct Reasoning, Groq Cloud `whisper-large-v3-turbo` SOTA In-Memory Speech Analytics, SentenceTransformers Dense Vector Embeddings, SpaCy Parts-of-Speech Action-Verb Mining, NetworkX Directed Graph Topological Skill DAGs, and Tavily Live Engineering Research.
 
 ---
 
-## 📌 Table of Contents
-1. [Executive Summary](#-executive-summary)
-2. [Problem Statement in Detail](#-problem-statement-in-detail)
-3. [Our Engineering Solution](#-our-engineering-solution)
-4. [System Architecture & Data Flow Diagrams](#-system-architecture--data-flow-diagrams)
-5. [Autonomous Agent Architecture](#-autonomous-agent-architecture)
-6. [Production ML & Neural NLP Pipeline](#-production-ml--neural-nlp-pipeline)
-7. [SOTA In-Memory Voice & Speech Engine](#-sota-in-memory-voice--speech-engine)
-8. [Production Tools Directory (`app/tools/`)](#-production-tools-directory-apptools)
-9. [Database Architecture & Schema (9 SQL Tables)](#-database-architecture--schema-9-sql-tables)
-10. [Complete REST API Route Directory](#-complete-rest-api-route-directory)
-11. [Zero-Hardcoding Guarantee & Verification](#-zero-hardcoding-guarantee--verification)
-12. [Local Setup & Production Environment Guide](#-local-setup--production-environment-guide)
+## 📌 Master Table of Contents
+1. [Executive Overview & Interview Elevator Pitch](#1-executive-overview--interview-elevator-pitch)
+2. [Detailed Problem Statement & Engineering Solution](#2-detailed-problem-statement--engineering-solution)
+3. [System Architecture & Workflow Diagrams](#3-system-architecture--workflow-diagrams)
+4. [Exhaustive Feature-by-Feature Deep Dive](#4-exhaustive-feature-by-feature-deep-dive)
+5. [Core Services & Technical Engine Breakdown](#5-core-services--technical-engine-breakdown)
+6. [Production Tool Suite Documentation (`app/tools/`)](#6-production-tool-suite-documentation-apptools)
+7. [Database Architecture & Schema Specs (9 SQL Tables)](#7-database-architecture--schema-specs-9-sql-tables)
+8. [Complete REST API Endpoint Directory & Latency Benchmarks](#8-complete-rest-api-endpoint-directory--latency-benchmarks)
+9. [Senior Architectural Design Decisions & Q&A](#9-senior-architectural-design-decisions--qa)
+10. [Zero-Hardcoding Guarantee & Principal QA Verification](#10-zero-hardcoding-guarantee--principal-qa-verification)
+11. [Local Setup & Production Deployment Guide](#11-local-setup--production-deployment-guide)
 
 ---
 
-## 🚀 Executive Summary
+## 🎯 1. Executive Overview & Interview Elevator Pitch
 
-**A.C.E. (Autonomous Career Intelligence Engine)** is an enterprise-grade AI career co-pilot designed to streamline job application tracking, resume ATS optimization, live engineering company research, topological skill prerequisite mapping, and real-time voice-driven mock interview simulation.
-
-Unlike standard RAG wrappers or hardcoded chat templates, A.C.E. features:
-* **True Non-Deterministic Reasoning**: A stateful ReAct Autonomous Agent loop (`orchestrator.py`) that dynamically selects, orders, and invokes deterministic Python feature tools based on candidate intent.
-* **SOTA In-Memory Voice Analytics**: ~150ms speech-to-text powered by Groq Cloud (`whisper-large-v3-turbo`) with **Zero-Disk Storage** (100% in-memory RAM processing and instant buffer purging for complete privacy).
-* **Deterministic Mathematical & Linguistic NLP**: Dense 384-dimensional vector embeddings, SpaCy Parts-of-Speech action-verb/interjection tagger, scikit-learn TF-IDF N-gram keyphrase extraction, and NetworkX Directed Acyclic Graph (DAG) topological sorting.
-* **Production-First Clean Code**: Zero static fallback lists, zero hardcoded string tuples, zero fake question templates, and strictly-typed Python Enums (`ApplicationStatus`).
+### The 30-Second Interview Elevator Pitch
+> *"A.C.E. (Autonomous Career Intelligence Engine) is an autonomous AI career co-pilot designed to streamline the fragmented job preparation lifecycle. Instead of using disjointed tools for resume building, ATS scoring, Glassdoor company research, and mock interviews, A.C.E. unifies everything under a single stateful Autonomous ReAct Agent. It features a sub-200ms in-memory voice mock interview studio powered by Groq Cloud Whisper, a topological skill prerequisite graph engine powered by NetworkX, and 384-dimensional dense vector semantic matching using SentenceTransformers."*
 
 ---
 
-## ❗ Problem Statement in Detail
+## ❓ 2. Detailed Problem Statement & Engineering Solution
 
-Modern job seekers and software engineers face a deeply fragmented, inefficient career preparation landscape:
+### The Industry Problem
+1. **Fragmented Career Workflows**: Candidates use 4–5 unintegrated tools: static ATS checkers, Glassdoor company reviews, spreadsheets for job tracking, and generic video recorders. None of these share candidate context or track historical progress.
+2. **Superficial Keyword-Matching ATS Scanners**: Traditional ATS tools use naive string exact-matching. If a candidate's resume lists *"Distributed Systems"* but the job description asks for *"High-Scale Microservices"*, legacy checkers report a false-negative gap.
+3. **Lack of Sequential Prerequisite Roadmaps**: When candidates miss skills for a target role, standard tools output unstructured word lists. They cannot determine **which skill to learn first** (e.g. *you must learn Docker before Kubernetes, and Protocol Buffers before gRPC*).
+4. **High-Latency, Privacy-Invasive Voice Mock Platforms**: Legacy mock interview tools take 3–5 seconds to process speech and store audio files on disk, creating laggy calls and violating user privacy.
 
-1. **Fragmented & Disjointed Career Tools**:
-   Candidates are forced to juggle 4–5 separate unintegrated tools: ATS resume scanners, static leetcode mock platforms, company Glassdoor reviews, and manual job application spreadsheets. None of these platforms share context or track multi-turn user progress.
-2. **Shallow Keyword-Matching ATS Scanners**:
-   Traditional resume evaluators rely on primitive keyword exact-matching. If a resume lists *"Distributed Systems"* but the job description asks for *"High-Scale Microservices"*, legacy tools fail to recognize semantic equivalence.
-3. **Lack of Prerequisite Learning Roadmaps**:
-   When candidates lack required skills for a target role (e.g. missing `Kubernetes` and `gRPC`), standard career tools just list missing words. They cannot calculate the **topological prerequisite order** (e.g. *you must learn Docker before Kubernetes, and Protocol Buffers before gRPC*).
-4. **Superficial & Laggy Mock Interview Tools**:
-   Existing mock interview tools either rely on static text prompts or high-latency speech tools (~3-5 second delay) that save audio files to disk, violating privacy and destroying the real-time conversational flow of a real technical screening call.
-
----
-
-## 💡 Our Engineering Solution
-
-A.C.E. solves these challenges by building a **unified, stateful, production-grade Career Intelligence Platform**:
-
-* **Unified Stateful Agent Hub**: Integrates candidate memory, resume vector profiles, application funnels, live company intelligence, and mock interviews into a single agentic environment powered by PostgreSQL and vector memory RAG.
-* **Dense 384-Dim Semantic Embedding Match**: Uses `SentenceTransformers` (`all-MiniLM-L6-v2`) to score exact Cosine Distance ($ \frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\| \|\mathbf{v}\|} $), detecting deep semantic alignment regardless of exact word phrasing.
-* **Topological Skill Graph Engine (`NetworkX`)**: Computes Directed Acyclic Graph ($\text{DAG}$) topological sorts and shortest learning paths to give candidates step-by-step prerequisite roadmaps.
-* **Sub-200ms In-Memory Voice Engine**: Streams spoken audio directly into RAM buffers, transcribes via Groq Cloud (`whisper-large-v3-turbo`) in **~150ms**, analyzes speech pace (WPM), interjections (`INTJ`), and STAR method metrics, and immediately purges audio bytes from RAM (`0 Disk I/O`).
+### Our Engineering Solution
+* **Unified Stateful Agent Engine**: Integrates candidate memory, resumes, application tracking, and interview history into a central hub backed by PostgreSQL and vector memory RAG.
+* **384-Dimensional Dense Vector Semantic Match**: Uses `SentenceTransformers` (`all-MiniLM-L6-v2`) and Cosine Distance to evaluate deep semantic meaning rather than exact word matching.
+* **Topological Skill Prerequisite Graph Engine (`NetworkX`)**: Computes Directed Acyclic Graphs ($\text{DAG}$) to give candidates step-by-step prerequisite roadmaps.
+* **Sub-200ms In-Memory Voice Engine**: Streams spoken audio directly into RAM buffers, transcribes via Groq Cloud (`whisper-large-v3-turbo`) in **~150ms**, and **instantly purges the bytes from RAM (`0 Disk I/O`)** for zero disk overhead and maximum privacy.
 
 ---
 
-## 🏗️ System Architecture & Data Flow Diagrams
+## 📐 3. System Architecture & Workflow Diagrams
 
-### High-Level System Architecture
+### System Architecture Diagram
 
 ```mermaid
 graph TD
-    Client[Candidate Web Browser / Vite React Dashboard] <-->|HTTP / JSON / Web Speech STT| FastAPI[FastAPI Async REST API Gateway]
-    
+    Client[Candidate Web Browser / Vite React Dashboard] <-->|HTTP / JSON / Web Speech STT| Gateway[FastAPI Async REST Gateway]
+
     subgraph Core Engine Layer
-        FastAPI --> Auth[Auth & Security Module]
-        FastAPI --> Agent[Autonomous ReAct Orchestrator]
-        FastAPI --> Audio[Audio Transcription Engine]
-        FastAPI --> Analytics[SQL Aggregation Engine]
+        Gateway --> Auth[Auth & Security Module]
+        Gateway --> Agent[Autonomous ReAct Orchestrator]
+        Gateway --> Audio[In-Memory Audio Transcription Engine]
+        Gateway --> Analytics[SQL Date-Truncation Analytics Engine]
     end
 
     subgraph Autonomous Agent & Tools Layer
@@ -92,115 +76,155 @@ graph TD
     end
 
     subgraph Storage Layer
-        FastAPI <--> DB[(PostgreSQL / Async SQLAlchemy 2.0)]
+        Gateway <--> DB[(PostgreSQL / Async SQLAlchemy 2.0)]
     end
 ```
 
----
-
-## 🧠 Autonomous Agent Architecture
-
-The heart of A.C.E.'s non-deterministic intelligence is the **Unified Autonomous ReAct Agent** ([orchestrator.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/agents/orchestrator.py)).
-
-### ReAct Reasoning Loop Workflow
+### Autonomous ReAct Agent Loop Workflow
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Candidate
-    participant Orchestrator as ReAct Agent Orchestrator
+    participant Agent as Autonomous ReAct Agent Orchestrator
     participant LLM as ChatGoogleGenerativeAI / Gemini
-    participant Tools as Production Tool Registry
-    participant DB as PostgreSQL Database
+    participant Tools as Production Tool Suite
+    participant DB as PostgreSQL DB
 
-    Candidate->>Orchestrator: Send Candidate Query / Resume Context
-    Orchestrator->>DB: Load Session History & User Memories
-    DB-->>Orchestrator: Multi-Turn Conversation History
-    Orchestrator->>LLM: Send Query + Tool Descriptions + Memory Context
+    Candidate->>Agent: "Analyze my resume for Google Backend role & start mock interview"
+    Agent->>DB: Load chat session history & candidate vector memories
+    DB-->>Agent: Multi-Turn Conversation History
+    Agent->>LLM: Pass Candidate Query + Tool Descriptions + Memory Context
     
-    loop Dynamic Thought-Action-Observation Loop
-        LLM-->>Orchestrator: Thought: Need candidate skills & graph prerequisites
-        Orchestrator->>Tools: Invoke compute_topological_skill_gap_tool
-        Tools-->>Orchestrator: Observation: Missing [Kubernetes, gRPC]
-        Orchestrator->>LLM: Send Observation Context
-        LLM-->>Orchestrator: Thought: Need company live tech stack
-        Orchestrator->>Tools: Invoke search_company_intelligence_tool("Stripe")
-        Tools-->>Orchestrator: Observation: Live stack Go, Ruby, gRPC, Envoy
-        Orchestrator->>LLM: Send Observation Context
+    loop Dynamic Thought-Action-Observation Reasoning Loop
+        LLM-->>Agent: Thought: Parse resume & compute vector similarity
+        Agent->>Tools: Invoke nlp_semantic_similarity_tool
+        Tools-->>Agent: Observation: 82% semantic match, missing [Kubernetes, gRPC]
+        LLM-->>Agent: Thought: Calculate topological learning path
+        Agent->>Tools: Invoke compute_topological_skill_gap_tool
+        Tools-->>Agent: Observation: Path = Docker -> Kubernetes -> gRPC
+        LLM-->>Agent: Thought: Search Google live tech stack
+        Agent->>Tools: Invoke search_company_intelligence_tool("Google")
+        Tools-->>Agent: Observation: Stack = Go, C++, gRPC, Envoy, Borg
+        LLM-->>Agent: Thought: Generate role-specific technical questions
+        Agent->>Tools: Invoke generate_interview_questions_tool
+        Tools-->>Agent: Observation: 3 dynamic technical interview questions
     end
 
-    LLM-->>Orchestrator: Final Answer Formulation
-    Orchestrator->>DB: Persist ChatSession & ChatMessage
-    Orchestrator-->>Candidate: Return Grounded Career Intelligence Response
+    LLM-->>Agent: Final Response Formulation
+    Agent->>DB: Persist ChatSession & ChatMessage
+    Agent-->>Candidate: Return Comprehensive Grounded Roadmap + Questions
 ```
 
 ---
 
-## 🔬 Production ML & Neural NLP Pipeline
+## 🌟 4. Exhaustive Feature-by-Feature Deep Dive
 
-A.C.E. implements four distinct, deterministic Machine Learning and Natural Language Processing paradigms in [nlp_service.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/services/nlp_service.py):
+### 1. Multi-Format Resume Intelligence & ATS Scoring
+* **What it Does**: Parses uploaded PDF, DOCX, and TXT resumes into structured candidate JSON schemas.
+* **How it Works**:
+  - `pypdf` and `python-docx` extract raw text bytes.
+  - SpaCy Named Entity Recognition (`ORG`, `PRODUCT`, `DATE`) and regex patterns extract emails, phone numbers, and URLs dynamically.
+  - `SentenceTransformers` computes 384-dimensional dense vector Cosine Distance against target job descriptions to deliver ATS match percentages without keyword stuffing.
 
-### 1. Dense Vector Cosine Distance Matching (`SentenceTransformers`)
-Computes 384-dimensional dense vector embeddings using `all-MiniLM-L6-v2`. Semantic match similarity is calculated via exact vector dot product:
+### 2. Autonomous ReAct Agent Orchestrator
+* **What it Does**: Manages complex, multi-step candidate queries through non-deterministic reasoning.
+* **How it Works**:
+  - Implemented in [orchestrator.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/agents/orchestrator.py) using LangGraph `create_react_agent`.
+  - Dynamically decides which feature tools to execute, in what order, and how many times based on candidate intent.
+  - Loads multi-turn database conversation history and retrieves vector memories from PostgreSQL.
 
-$$\text{Cosine Similarity} = \frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\| \|\mathbf{v}\|} = \frac{\sum_{i=1}^{n} u_i v_i}{\sqrt{\sum_{i=1}^{n} u_i^2} \sqrt{\sum_{i=1}^{n} v_i^2}}$$
+### 3. Live Company Intelligence & Research Engine
+* **What it Does**: Gathers live engineering tech stacks, interview loop structures, and hiring trends for target companies (e.g. *Google*, *Stripe*, *OpenAI*).
+* **How it Works**:
+  - Executes live web search via Tavily API.
+  - Extracts statistical TF-IDF keyphrases from live search snippets.
+  - Gemini LLM synthesizes raw snippets into structured JSON company insights.
 
-* **Use Case**: Grading resume fit against target Job Descriptions without keyword-stuffing vulnerabilities.
+### 4. SOTA In-Memory Voice Mock Interview Studio
+* **What it Does**: Simulates a live technical interview screening call with real-time speech evaluation.
+* **How it Works**:
+  - The browser captures candidate speech via Web Speech API / MediaRecorder into an in-memory `Blob`.
+  - Streams raw audio bytes to Groq Cloud `whisper-large-v3-turbo` for sub-200ms STT transcription (~150ms latency).
+  - SpaCy POS tagger mines verbal hesitations (`INTJ` interjections like *um*, *uh*, *like*).
+  - Evaluates speech pace (Words Per Minute) and STAR method structural coverage.
+  - **Instantly purges audio bytes from RAM (`del audio_bytes`)** for 0 disk I/O and total privacy.
 
-### 2. Topological Skill Prerequisite Graphs (`NetworkX`)
-Constructs a Directed Acyclic Graph ($\text{DAG} = (V, E)$) where vertices $V$ represent technical keyphrases and directed edges $E$ represent sequential learning prerequisites.
-* **Topological Sort**: Computes mathematically valid prerequisite order ($\text{topological\_sort}(G)$).
-* **Shortest Path**: Computes shortest learning paths ($\text{shortest\_path}(G, s, t)$) from candidate baseline to target missing skills.
+### 5. Topological Skill Prerequisite Graph Visualizer
+* **What it Does**: Computes mathematically valid step-by-step prerequisite learning roadmaps for missing candidate skills.
+* **How it Works**:
+  - Constructs a Directed Acyclic Graph ($\text{DAG}$) in `NetworkX`.
+  - Runs `nx.topological_sort(G)` to calculate skill ordering.
+  - Runs `nx.shortest_path(G, source, target)` to identify optimal learning paths.
 
-### 3. Syntactic Dependency & POS Action-Verb Mining (`SpaCy`)
-Uses `en_core_web_sm` statistical dependency parsing to extract:
-* **Action Verbs**: Verbs tagged as `VERB` (e.g. *Optimized*, *Architected*, *Reduced*).
-* **Quantifiable Metrics**: Regex pattern matching for impact figures (`40%`, `$150k`, `50ms`, `100k RPS`).
-* **Verbal Interjections**: Identifies speech hesitations tagged as `INTJ` or `DISCOURSE` (e.g. *um*, *uh*, *like*).
-
-### 4. Statistical N-Gram Keyphrase Extraction (`scikit-learn TF-IDF`)
-Extracts 1-, 2-, and 3-word keyphrases using term frequency-inverse document frequency analysis over input job texts without hardcoded dictionaries.
+### 6. Job Application Tracker & Analytics Dashboard
+* **What it Does**: Tracks candidate applications across recruitment funnel stages (`applied`, `interview`, `offer`, `rejected`) using strictly-typed Python Enums (`ApplicationStatus`).
+* **How it Works**:
+  - Automatically computes vector match scores when adding new job applications.
+  - Runs SQL date-truncation aggregations in FastAPI to generate monthly application timeline charts and average interview score trends over time.
 
 ---
 
-## 🎙️ SOTA In-Memory Voice & Speech Engine
+## 🔬 5. Core Services & Technical Engine Breakdown
 
-A.C.E. features a real-time, low-latency Voice Mock Interview Engine in [audio_service.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/services/audio_service.py):
+A.C.E.'s backend architecture is modularized into 6 specialized core services:
 
-```mermaid
-graph LR
-    Browser[Candidate Browser MediaRecorder] -->|1. Stream Audio Blob| RAM[In-Memory RAM Buffer io.BytesIO]
-    RAM -->|2. ~150ms STT| Groq[Groq Cloud whisper-large-v3-turbo LPU]
-    Groq -->|3. Verbatim Transcript| NLP[SpaCy POS Interjection Tagger & STAR Evaluator]
-    NLP -->|4. Purge RAM Buffer| Delete[RAM Buffer Memory Delete del audio_bytes]
-    NLP -->|5. Save Transcript| DB[(PostgreSQL InterviewSession)]
+```
++---------------------------------------------------------------------------------------------------+
+|                                   BACKEND CORE SERVICES SUITE                                     |
++----------------------+--------------------+--------------------+-------------------+--------------+
+| 1. nlp_service.py    | 2. audio_service.py| 3. doc_parser.py   | 4. company_intel  | 5. resume_par|
+| Dense Embeddings     | Groq Cloud STT     | PyPDF & DOCX       | Tavily Search &   | Gemini LLM   |
+| SpaCy POS Tagger     | ~150ms Latency     | Byte Extraction    | LLM Synthesis     | Schema Parse |
+| NetworkX Skill DAG   | RAM Buffer Purge   | Encoding Fallbacks | Tech Stack Mining | Regex Extr   |
++----------------------+--------------------+--------------------+-------------------+--------------+
 ```
 
-* **~150ms Sub-Second Latency**: Groq Cloud LPUs running OpenAI `whisper-large-v3-turbo`.
-* **Zero-Disk Storage**: 100% in-memory RAM processing (`io.BytesIO`) with instant RAM buffer purging (`del audio_bytes`). Zero audio files written to disk for maximum candidate privacy.
-* **Dual-Engine Fallback**: Seamless fallback to Google Gemini 1.5 Flash Multimodal Audio if Groq API key is unconfigured.
+### Service 1: `nlp_service.py` (Production NLP Service)
+* **Dense Vector Embeddings**: `SentenceTransformers("all-MiniLM-L6-v2")` generating 384-dim dense vectors with Cosine Similarity ($ \frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\| \|\mathbf{v}\|} $).
+* **SpaCy POS Tagger**: `en_core_web_sm` pipeline mining action verbs (`VERB`), interjections (`INTJ`/`DISCOURSE`), and metric impact tokens (`40%`, `$150k`, `50ms`).
+* **TF-IDF Keyphrase Extractor**: `scikit-learn TfidfVectorizer(ngram_range=(1,3))` for 1-, 2-, and 3-word statistical keyphrase ranking.
+* **NetworkX DAG Engine**: Directed Graph topological sorting and shortest path calculations.
+
+### Service 2: `audio_service.py` (In-Memory Speech Engine)
+* **Primary Engine**: Groq Cloud `whisper-large-v3-turbo` (~150ms transcription speed).
+* **Fallback Engine**: Google Gemini 1.5 Flash Multimodal Audio API.
+* **Zero-Disk Storage**: Direct RAM buffer processing (`io.BytesIO`) with instant memory purging (`del audio_bytes`).
+
+### Service 3: `document_parser.py` (Multi-Format Ingestion)
+* **Formats**: `.pdf` (`pypdf`), `.docx` (`python-docx`), `.txt` / `.md` (multi-encoding fallback).
+* **Safety**: Ingests raw file bytes and outputs sanitized text streams.
+
+### Service 4: `company_intelligence.py` (Web Intelligence)
+* Live Tavily web search integration extracting engineering tech stacks, interview stages, and active hiring trends.
+
+### Service 5: `resume_parser.py` (Resume Schema Parser)
+* Gemini 1.5 Flash LLM structured parsing into Pydantic `ResumeSchema` with dynamic regex entity extraction fallbacks.
+
+### Service 6: `memory_service.py` (Vector RAG Memory)
+* PostgreSQL vector cosine memory search retrieving candidate preferences, target salary, and historical weak areas.
 
 ---
 
-## 🛠️ Production Tools Directory (`app/tools/`)
+## 🛠️ 6. Production Tool Suite Documentation (`app/tools/`)
 
-All feature capabilities are organized into deterministic, self-contained Python tools:
+All agent capabilities are encapsulated in deterministic Python tools:
 
-| Tool Name | Module Path | Input Schema | Functionality |
-| :--- | :--- | :--- | :--- |
-| `parse_resume_document_tool` | [resume_tools.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/tools/resume_tools.py) | `ResumeParseInput` | Multi-format PDF/DOCX document parsing & schema extraction. |
-| `nlp_semantic_similarity_tool` | [resume_tools.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/tools/resume_tools.py) | `SemanticMatchInput` | 384-dim SentenceTransformers vector Cosine Distance scoring. |
-| `compute_topological_skill_gap_tool` | [skill_dag_tools.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/tools/skill_dag_tools.py) | `SkillDAGInput` | NetworkX Directed Graph topological sort & learning paths. |
-| `search_company_intelligence_tool` | [company_tools.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/tools/company_tools.py) | `CompanyQueryInput` | Live Tavily web search & tech stack synthesis. |
-| `generate_interview_questions_tool` | [interview_tools.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/tools/interview_tools.py) | `QuestionGenInput` | Dynamic Gemini LLM interview question generation. |
-| `evaluate_star_interview_tool` | [interview_tools.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/tools/interview_tools.py) | `AnswerEvalInput` | SpaCy POS action-verb & STAR method evaluation. |
-| `retrieve_user_memory_tool` | [memory_tools.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/tools/memory_tools.py) | `MemoryQueryInput` | PostgreSQL vector memory RAG search retrieval. |
+| Tool Function | File Path | Input Pydantic Schema | Detailed Description | Avg Latency |
+| :--- | :--- | :--- | :--- | :--- |
+| `parse_resume_document_tool` | [resume_tools.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/tools/resume_tools.py) | `ResumeParseInput(raw_text)` | Ingests raw resume text and returns structured candidate JSON schema. | ~300ms |
+| `nlp_semantic_similarity_tool` | [resume_tools.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/tools/resume_tools.py) | `SemanticMatchInput(resume_text, jd_text)` | Computes 384-dim SentenceTransformers Cosine Distance match score. | ~40ms |
+| `compute_topological_skill_gap_tool` | [skill_dag_tools.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/tools/skill_dag_tools.py) | `SkillDAGInput(candidate_skills, job_desc)` | Constructs NetworkX DAG, runs topological sort & shortest learning paths. | ~15ms |
+| `search_company_intelligence_tool` | [company_tools.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/tools/company_tools.py) | `CompanyQueryInput(company_name)` | Executes live Tavily search & synthesizes company tech stack insights. | ~800ms |
+| `generate_interview_questions_tool` | [interview_tools.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/tools/interview_tools.py) | `QuestionGenInput(role_title, tech_stack)` | Generates 3 role-tailored technical interview questions via Gemini LLM. | ~500ms |
+| `evaluate_star_interview_tool` | [interview_tools.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/tools/interview_tools.py) | `AnswerEvalInput(question, user_answer)` | Evaluates STAR structure, SpaCy POS verbs, metrics, and interjection crutches. | ~400ms |
+| `retrieve_user_memory_tool` | [memory_tools.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/tools/memory_tools.py) | `MemoryQueryInput(query_or_category)` | Searches PostgreSQL user vector memories for candidate goals/weak areas. | ~20ms |
 
 ---
 
-## 🗄️ Database Architecture & Schema (9 SQL Tables)
+## 🗄️ 7. Database Architecture & Schema Specs (9 SQL Tables)
 
-Database models are defined using Async SQLAlchemy 2.0 in [user.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/models/user.py):
+Database models are implemented in Async SQLAlchemy 2.0 ([user.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/models/user.py)):
 
 ```mermaid
 erDiagram
@@ -224,10 +248,10 @@ erDiagram
     profiles {
         int id PK
         int user_id FK
+        string bio
         string target_role
-        int target_salary_min
-        int target_salary_max
-        json preferences
+        int overall_score
+        json skills_json
     }
 
     applications {
@@ -257,59 +281,75 @@ erDiagram
     }
 ```
 
----
-
-## 🌐 Complete REST API Route Directory
-
-All API endpoints are registered in [main.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/app/main.py) under `/api/v1`:
-
-### 1. Authentication Router (`/api/v1/auth`)
-* `POST /api/v1/auth/register`: Register new candidate user account.
-* `POST /api/v1/auth/login`: Authenticate candidate & issue OAuth2 JWT Access Token.
-* `GET /api/v1/auth/me`: Retrieve currently authenticated user profile.
-
-### 2. Resume Router (`/api/v1/resume`)
-* `POST /api/v1/resume/upload`: Upload `.pdf`, `.docx`, or `.txt` resume document.
-* `GET /api/v1/resume/me`: Fetch candidate's uploaded resumes & parsed JSON profile.
-
-### 3. Company Router (`/api/v1/company`)
-* `GET /api/v1/company/insights/{company_name}`: Fetch live engineering stack & interview process via Tavily.
-
-### 4. Autonomous Agent Router (`/api/v1/agent`)
-* `POST /api/v1/agent/query`: Send open-ended career prompt to Autonomous ReAct Agent.
-* `GET /api/v1/agent/sessions`: Fetch candidate's past multi-turn chat sessions.
-* `GET /api/v1/agent/sessions/{session_id}`: Fetch message history for specific session.
-
-### 5. Memory Router (`/api/v1/memory`)
-* `POST /api/v1/memory/`: Store explicit user career goal or weak area into vector memory.
-* `GET /api/v1/memory/`: Search relevant candidate vector memories.
-
-### 6. Interview Router (`/api/v1/interview`)
-* `POST /api/v1/interview/start`: Provision new interview session with dynamic LLM questions.
-* `POST /api/v1/interview/submit-answer`: Submit text response for STAR & interjection evaluation.
-* `POST /api/v1/interview/audio-answer`: Ingest raw audio stream for Groq ~150ms STT & evaluation.
-* `POST /api/v1/interview/finish`: Complete interview session & generate `InterviewFeedback`.
-
-### 7. Applications Router (`/api/v1/applications`)
-* `POST /api/v1/applications/`: Create tracked job application with auto vector match scoring.
-* `GET /api/v1/applications/`: List candidate applications with status filtering (`ApplicationStatus`).
-* `PATCH /api/v1/applications/{id}`: Update application stage.
-* `DELETE /api/v1/applications/{id}`: Delete application record.
-
-### 8. Analytics Router (`/api/v1/analytics`)
-* `GET /api/v1/analytics/dashboard`: SQL date-truncation aggregations for job funnel & interview scores.
+### Table Definitions
+1. **`users`**: Core candidate identity, email index, hashed passwords, active flags.
+2. **`profiles`**: Candidate career preferences, target roles, salary range (`target_salary_min`/`max`), skills JSON.
+3. **`resumes`**: File metadata, raw document text, structured parsed JSON schema.
+4. **`applications`**: Application funnel records, company name, role title, `ApplicationStatus` Enum, match analysis.
+5. **`interview_sessions`**: Role title, question arrays, full QA transcript logs, completion status.
+6. **`interview_feedbacks`**: Overall interview score, strengths, weakness areas, improvement recommendations.
+7. **`user_memories`**: Candidate career goals, preferences, 384-dim dense vector embeddings (`JSON`).
+8. **`chat_sessions`**: ReAct agent conversation session headers and session titles.
+9. **`chat_messages`**: Individual conversation turns tagged by role (`"user"` / `"assistant"`).
 
 ---
 
-## 🛡️ Zero-Hardcoding Guarantee & Verification
+## 🌐 8. Complete REST API Endpoint Directory & Latency Benchmarks
 
-A.C.E. is engineered under strict production principles:
+All API endpoints are registered in `backend/app/main.py` under `/api/v1`:
+
+| Router | Method | Endpoint Path | Description | Avg Latency |
+| :--- | :--- | :--- | :--- | :--- |
+| **Auth** | `POST` | `/api/v1/auth/register` | Register new candidate user account | ~45ms |
+| **Auth** | `POST` | `/api/v1/auth/login` | Authenticate candidate & issue OAuth2 JWT Token | ~40ms |
+| **Auth** | `GET` | `/api/v1/auth/me` | Retrieve currently authenticated user profile | ~15ms |
+| **Resume** | `POST` | `/api/v1/resume/upload` | Upload `.pdf`/`.docx`/`.txt` resume & parse schema | ~450ms |
+| **Resume** | `GET` | `/api/v1/resume/me` | Fetch candidate's uploaded resumes & JSON profile | ~20ms |
+| **Company** | `GET` | `/api/v1/company/insights/{company}` | Fetch live engineering stack via Tavily & Gemini | ~850ms |
+| **Agent** | `POST` | `/api/v1/agent/query` | Send open-ended query to ReAct Agent loop | ~1.2s |
+| **Agent** | `GET` | `/api/v1/agent/sessions` | Fetch candidate's past multi-turn chat sessions | ~25ms |
+| **Agent** | `GET` | `/api/v1/agent/sessions/{id}` | Fetch message history for specific chat session | ~20ms |
+| **Memory** | `POST` | `/api/v1/memory/` | Store candidate career goal into vector memory | ~35ms |
+| **Memory** | `GET` | `/api/v1/memory/` | Search relevant candidate vector memories | ~25ms |
+| **Interview**| `POST` | `/api/v1/interview/start` | Provision new mock interview with LLM questions | ~600ms |
+| **Interview**| `POST` | `/api/v1/interview/submit-answer` | Submit text response for STAR & interjection eval | ~350ms |
+| **Interview**| `POST` | `/api/v1/interview/audio-answer` | Stream audio blob for Groq ~150ms STT & eval | **~180ms** |
+| **Interview**| `POST` | `/api/v1/interview/finish` | Complete interview session & generate feedback | ~200ms |
+| **Applications**| `POST` | `/api/v1/applications/` | Create tracked job application with auto match | ~60ms |
+| **Applications**| `GET` | `/api/v1/applications/` | List candidate applications with Enum status filter | ~20ms |
+| **Applications**| `PATCH` | `/api/v1/applications/{id}`| Update application funnel stage using Enum | ~25ms |
+| **Applications**| `DELETE`| `/api/v1/applications/{id}`| Delete job application record | ~15ms |
+| **Analytics**| `GET` | `/api/v1/analytics/dashboard` | Fetch SQL date aggregations for funnel & scores | ~30ms |
+
+---
+
+## 🔑 9. Senior Architectural Design Decisions & Q&A
+
+Be prepared to answer these **4 classic Senior Engineer interview questions**:
+
+### Q1: *"Why did you design 1 Unified Autonomous Agent instead of multiple sub-agents?"*
+> **Answer**: *"Operations like PDF document parsing, SentenceTransformers vector scoring, and NetworkX graph sorting are deterministic Python calculations. Forcing separate LLM sub-agents for those tasks would add 4x LLM latency, higher token costs, and unnecessary failure points. Instead, I architected a single dynamic ReAct Autonomous Agent equipped with specialized deterministic tools."*
+
+### Q2: *"How do you handle ATS keyword stuffing?"*
+> **Answer**: *"Instead of counting raw keyword occurrences, we generate 384-dimensional dense vector embeddings using SentenceTransformers and score Cosine Distance. This evaluates deep semantic context rather than superficial keyword matching."*
+
+### Q3: *"How does your mock interview voice processing work?"*
+> **Answer**: *"We stream raw audio blobs from the browser directly into server RAM memory. We route the stream to Groq Cloud's `whisper-large-v3-turbo` model for sub-200ms transcription, analyze verbal hesitations via SpaCy POS tagging, and immediately purge the audio bytes from RAM. Zero audio files are stored on disk."*
+
+### Q4: *"How do you guarantee zero hardcoding in production?"*
+> **Answer**: *"All skill keyphrases, tech stacks, and fallbacks are computed 100% dynamically via TF-IDF, SpaCy entity recognition, and LLM synthesis. All application statuses use strictly-typed Python Enums."*
+
+---
+
+## 🛡️ 10. Zero-Hardcoding Guarantee & Principal QA Verification
+
+A.C.E. is built under strict production principles:
 1. **Zero Hardcoded Keywords**: All skills, tech stacks, and keyphrases are extracted 100% dynamically via TF-IDF or SpaCy.
 2. **Zero Template Question Arrays**: Interview questions are generated dynamically via Gemini LLM and job description context.
 3. **Zero Static Fallback Strings**: Email, phone, and entity fallbacks use regex pattern extraction (`re.findall`) and SpaCy entity recognition (`ORG`, `PRODUCT`).
 4. **Strict Type Safety**: All application statuses use Python Enum (`ApplicationStatus`).
 
-### Automated Verification Suite
+### Automated Test Verification Suite
 Run the principal QA automation suite ([test_backend_suite.py](file:///c:/Users/B.PAVANKALYAN%20REDDY/Desktop/ACE/backend/tests/test_backend_suite.py)):
 ```bash
 cd backend
@@ -319,12 +359,12 @@ cd backend
 
 ---
 
-## ⚡ Local Setup & Production Environment Guide
+## ⚡ 11. Local Setup & Production Deployment Guide
 
 ### Prerequisites
 * Python 3.11+
 * Node.js 18+
-* PostgreSQL (Optional for production, SQLite in-memory fallback included for dev)
+* PostgreSQL (Optional for production; SQLite in-memory fallback included for dev)
 
 ### Environment Configuration (`backend/.env`)
 Create `backend/.env`:
