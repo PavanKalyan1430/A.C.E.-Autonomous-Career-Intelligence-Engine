@@ -1,102 +1,77 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* ── LIGHT MODE (Executive Greenery) ────────────────────────── */
+:root {
+  --surface:           #ffffff;      /* Cards */
+  --surface-secondary: #faf9f6;      /* Main Page Canvas - very warm white */
+  --surface-elevated:  #ffffff;      /* Modals */
 
-@layer base {
-  *, *::before, *::after { box-sizing: border-box; }
+  --border:            #e8e4db;      /* Borders */
+  --border-subtle:     #f3efe8;      /* Cream */
 
-  html { color-scheme: dark; }
-
-  body {
-    @apply bg-bg text-text-primary font-sans antialiased;
-    min-height: 100vh;
-  }
-
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { @apply bg-bg; }
-  ::-webkit-scrollbar-thumb { @apply bg-bg-border rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-accent/50; }
-
-  ::selection { @apply bg-accent/30 text-text-primary; }
+  --text-primary:      #3d3d3d;      /* Darkest shade (#3d3d3d) for text */
+  --text-secondary:    #4E6243;      /* Asparagus */
+  --text-muted:        #6B8F71;      /* Fern */
 }
 
-@layer components {
-  .card {
-    @apply bg-bg-surface border border-bg-border rounded-2xl p-6;
-  }
+/* ── DARK MODE (Deep Jungle) ────────────────────────────────── */
+.dark {
+  --surface:           #18291E;      /* Dark Forest */
+  --surface-secondary: #0D2B1D;      /* Deep Jungle */
+  --surface-elevated:  #345635;      /* Forest */
 
-  .card-elevated {
-    @apply bg-bg-elevated border border-bg-border rounded-2xl p-6;
-  }
+  --border:            #4E6243;      /* Asparagus */
+  --border-subtle:     #18291E;
 
-  .glow-accent {
-    box-shadow: 0 0 30px rgba(99, 102, 241, 0.2), 0 0 60px rgba(99, 102, 241, 0.1);
-  }
+  --text-primary:      #ffffff;
+  --text-secondary:    #AEC3B0;      /* Sage */
+  --text-muted:        #6B8F71;      /* Fern */
+}
 
-  .shimmer {
-    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite linear;
-  }
+/* ── BASE ───────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  .gradient-text {
-    @apply bg-gradient-to-r from-accent via-violet to-indigo-400 bg-clip-text text-transparent;
-  }
+html { scroll-behavior: smooth; }
 
-  .nav-item {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-all duration-200 cursor-pointer text-sm font-medium;
-  }
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: var(--text-primary);
+  background-color: var(--surface-secondary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
 
-  .nav-item.active {
-    @apply text-text-primary bg-accent/10 border border-accent/20;
-  }
+h1, h2, h3, .font-heading {
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+}
 
-  .btn-primary {
-    @apply bg-accent hover:bg-accent-hover text-white font-medium px-4 py-2 rounded-xl transition-all duration-200 flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed;
-  }
+/* ── SCROLLBAR ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-  .btn-secondary {
-    @apply bg-bg-elevated hover:bg-bg-border text-text-primary font-medium px-4 py-2 rounded-xl border border-bg-border transition-all duration-200 flex items-center gap-2 text-sm;
-  }
+/* ── FOCUS ──────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #336659;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 
-  .btn-ghost {
-    @apply text-text-muted hover:text-text-primary hover:bg-bg-elevated px-3 py-2 rounded-xl transition-all duration-200 text-sm flex items-center gap-2;
-  }
+/* ── ANIMATIONS ─────────────────────────────────────────────── */
+.ai-pulse {
+  display: inline-flex;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background-color: #6B8F71;
+  animation: pulseDot 2s ease-in-out infinite;
+}
 
-  .input {
-    @apply w-full bg-bg-elevated border border-bg-border rounded-xl px-4 py-2.5 text-text-primary text-sm placeholder:text-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all duration-200;
-  }
-
-  .badge {
-    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium;
-  }
-
-  .badge-accent  { @apply badge bg-accent/10  text-accent  border border-accent/20;  }
-  .badge-success { @apply badge bg-success/10 text-success border border-success/20; }
-  .badge-warning { @apply badge bg-warning/10 text-warning border border-warning/20; }
-  .badge-danger  { @apply badge bg-danger/10  text-danger  border border-danger/20;  }
-  .badge-violet  { @apply badge bg-violet/10  text-violet  border border-violet/20;  }
-  .badge-muted   { @apply badge bg-bg-elevated text-text-muted border border-bg-border; }
-
-  .stat-card {
-    @apply card hover:border-accent/30 transition-all duration-300 cursor-default;
-  }
-
-  .page-header {
-    @apply mb-8;
-  }
-
-  .page-title {
-    @apply text-2xl font-bold text-text-primary tracking-tight;
-  }
-
-  .page-subtitle {
-    @apply text-sm text-text-muted mt-1;
-  }
-
-  .skeleton {
-    @apply bg-bg-elevated rounded-lg shimmer;
-  }
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.85); }
 }

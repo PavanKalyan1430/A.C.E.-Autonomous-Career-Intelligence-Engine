@@ -1,15 +1,46 @@
+import React from 'react'
+import { Sidebar } from './Sidebar'
+import { Bell, Search } from 'lucide-react'
+
 import { Outlet } from 'react-router-dom'
-import Sidebar from './Sidebar'
 
 export default function AppLayout() {
   return (
-    <div className="flex min-h-screen bg-bg">
+    <div className="flex min-h-screen bg-neutral-50 dark:bg-neutral-900 font-sans text-neutral-700 dark:text-neutral-300">
       <Sidebar />
-      <main className="ml-60 flex-1 min-h-screen">
-        <div className="p-8 max-w-7xl mx-auto animate-fade-in">
+      
+      <div className="flex-1 ml-[260px] flex flex-col">
+        {/* Top Header */}
+        <header className="h-16 bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between px-8 sticky top-0 z-10">
+          <div className="flex items-center gap-6">
+            <h2 className="text-base font-semibold text-neutral-800 dark:text-white">Dashboard</h2>
+            
+            <div className="relative w-80 hidden md:block">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+              <input 
+                type="text" 
+                placeholder="Search jobs, skills, companies..." 
+                className="w-full pl-9 pr-4 py-1.5 bg-brand-cream dark:bg-neutral-900 border border-transparent rounded-md text-sm focus:bg-white focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none transition-all placeholder-neutral-400 text-neutral-700 dark:text-white"
+              />
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <button className="relative p-2 text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors">
+              <Bell size={18} />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-danger rounded-full border border-white dark:border-neutral-800"></span>
+            </button>
+            <div className="w-8 h-8 rounded-full bg-brand-primary text-white flex items-center justify-center font-bold text-xs shadow-sm cursor-pointer hover:bg-brand-hover transition-colors">
+              PR
+            </div>
+          </div>
+        </header>
+
+        {/* Main Page Content */}
+        <main className="flex-1 p-8 max-w-[1440px] mx-auto w-full">
           <Outlet />
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   )
 }

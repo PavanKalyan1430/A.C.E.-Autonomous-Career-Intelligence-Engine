@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
 
 import AppLayout from '@/components/layout/AppLayout'
+import LandingPage from '@/pages/landing/LandingPage'
 import LoginPage from '@/pages/auth/LoginPage'
 import SignupPage from '@/pages/auth/SignupPage'
 import DashboardPage from '@/pages/dashboard/DashboardPage'
@@ -32,13 +33,15 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          {/* Public routes */}
+          {/* Public landing page */}
+          <Route path="/" element={<LandingPage />} />
+
+          {/* Auth routes */}
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route path="/signup" element={<PublicRoute><SignupPage /></PublicRoute>} />
 
-          {/* Protected routes inside shell */}
+          {/* Protected app routes inside shell */}
           <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/resume" element={<ResumePage />} />
             <Route path="/companies" element={<CompaniesPage />} />
@@ -50,8 +53,8 @@ export default function App() {
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
 
-          {/* Catch-all */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          {/* Catch-all → landing */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </QueryClientProvider>

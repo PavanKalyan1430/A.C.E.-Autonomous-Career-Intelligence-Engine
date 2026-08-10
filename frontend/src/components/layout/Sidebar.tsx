@@ -1,83 +1,135 @@
-import { NavLink, useNavigate } from 'react-router-dom'
-import {
-  LayoutDashboard, FileText, Building2, Map, Briefcase,
-  MessageSquare, BarChart3, Settings, Bot, LogOut, Zap
+import React from 'react'
+import { NavLink } from 'react-router-dom'
+import { 
+  LayoutDashboard, 
+  BrainCircuit, 
+  FileText, 
+  Target, 
+  Map, 
+  Building2, 
+  MessageSquare, 
+  Briefcase, 
+  BarChart3, 
+  Settings, 
+  LogOut,
+  Moon,
+  Sun
 } from 'lucide-react'
-import { useAuthStore } from '@/store/authStore'
-import { motion } from 'framer-motion'
 
-const navItems = [
-  { label: 'Dashboard',      icon: LayoutDashboard, to: '/dashboard' },
-  { label: 'Resume',         icon: FileText,         to: '/resume' },
-  { label: 'Companies',      icon: Building2,        to: '/companies' },
-  { label: 'Career Planner', icon: Map,              to: '/career' },
-  { label: 'Applications',   icon: Briefcase,        to: '/applications' },
-  { label: 'Interviews',     icon: MessageSquare,    to: '/interviews' },
-  { label: 'AI Assistant',   icon: Bot,              to: '/assistant' },
-  { label: 'Analytics',      icon: BarChart3,        to: '/analytics' },
-]
+// Mocking useTheme for now until we build the context
+const useTheme = () => ({ theme: 'light', toggleTheme: () => {} })
 
-export default function Sidebar() {
-  const { user, logout } = useAuthStore()
-  const navigate = useNavigate()
+export const Sidebar: React.FC = () => {
+  const { theme, toggleTheme } = useTheme()
 
-  const handleLogout = () => {
-    logout()
-    navigate('/login')
-  }
+  const navGroups = [
+    {
+      label: 'Overview',
+      items: [
+        { name: 'Dashboard', path: '/', icon: <LayoutDashboard size={18} /> },
+      ]
+    },
+    {
+      label: 'Career Intelligence',
+      items: [
+        { name: 'AI Career Agent', path: '/agent', icon: <BrainCircuit size={18} /> },
+        { name: 'Resume Intelligence', path: '/resume', icon: <FileText size={18} /> },
+        { name: 'Job Intelligence', path: '/jobs', icon: <Target size={18} /> },
+        { name: 'Skill Roadmap', path: '/skills', icon: <Map size={18} /> },
+        { name: 'Company Intelligence', path: '/companies', icon: <Building2 size={18} /> },
+      ]
+    },
+    {
+      label: 'Interview',
+      items: [
+        { name: 'Mock Interview', path: '/interview', icon: <MessageSquare size={18} /> },
+      ]
+    },
+    {
+      label: 'Tracking',
+      items: [
+        { name: 'Applications', path: '/applications', icon: <Briefcase size={18} /> },
+        { name: 'Analytics', path: '/analytics', icon: <BarChart3 size={18} /> },
+      ]
+    }
+  ]
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-60 bg-bg-surface border-r border-bg-border flex flex-col z-30">
-      {/* Logo */}
-      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-bg-border">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-accent to-violet flex items-center justify-center flex-shrink-0">
-          <Zap size={16} className="text-white" />
-        </div>
-        <div>
-          <p className="text-sm font-bold text-text-primary tracking-tight">A.C.E.</p>
-          <p className="text-[10px] text-text-muted leading-tight">Career Intelligence</p>
+    <aside className="w-[260px] h-screen bg-[#0D2B1D] border-r border-[#18291E] flex flex-col fixed left-0 top-0 z-20 text-white shadow-xl">
+      
+      {/* Brand Header */}
+      <div className="h-16 px-6 flex items-center gap-3 mt-2 mb-2">
+        <img 
+          src="/logo.png" 
+          alt="A.C.E. Logo" 
+          className="h-10 w-auto object-contain filter drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] drop-shadow-[0_0_15px_rgba(45,154,99,0.5)]"
+        />
+        <div className="flex flex-col leading-none">
+          <h1 className="font-extrabold text-white leading-none tracking-tight text-xl">A.C.E.</h1>
+          <p className="text-[10px] uppercase font-semibold text-[#34B36F] tracking-widest mt-1">Career OS</p>
         </div>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              `nav-item ${isActive ? 'active' : ''}`
-            }
-          >
-            <item.icon size={17} />
-            {item.label}
-          </NavLink>
+      {/* Navigation */}
+      <div className="flex-1 overflow-y-auto py-4 px-3 flex flex-col gap-6 custom-scrollbar">
+        {navGroups.map((group, idx) => (
+          <div key={idx}>
+            <h3 className="px-3 text-[11px] font-semibold text-brand-ai uppercase tracking-wider mb-2">
+              {group.label}
+            </h3>
+            <div className="flex flex-col gap-0.5">
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      isActive
+                        ? 'bg-[#18291E] text-white shadow-inner relative'
+                        : 'text-[#AEC3B0] hover:bg-[#18291E]/60 hover:text-white hover:translate-x-1'
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive && (
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[4px] h-6 bg-brand-primary rounded-r-full shadow-[0_0_8px_rgba(51,102,89,0.8)]" />
+                      )}
+                      <span className={`${isActive ? 'text-brand-ai' : 'text-neutral-500 transition-colors'}`}>
+                        {item.icon}
+                      </span>
+                      {item.name}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </div>
         ))}
-      </nav>
-
-      {/* Divider */}
-      <div className="border-t border-bg-border mx-3" />
-
-      {/* Bottom */}
-      <div className="p-3 space-y-0.5">
-        <NavLink to="/settings" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-          <Settings size={17} /> Settings
-        </NavLink>
-        <button onClick={handleLogout} className="nav-item w-full text-danger/70 hover:text-danger hover:bg-danger/10">
-          <LogOut size={17} /> Logout
-        </button>
       </div>
 
-      {/* User tag */}
-      <div className="p-3 pt-0">
-        <div className="flex items-center gap-3 px-3 py-2.5 bg-bg-elevated rounded-xl border border-bg-border">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-accent to-violet flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-            {user?.email?.[0]?.toUpperCase() ?? 'U'}
+      {/* Footer / System */}
+      <div className="p-4 border-t border-[#18291E] space-y-1 bg-[#092015]">
+        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[#AEC3B0] hover:bg-[#18291E] hover:text-white transition-all duration-200">
+          <Settings size={18} className="opacity-70" />
+          Settings
+        </button>
+        <div className="flex items-center justify-between mt-2 pt-2">
+          <div className="flex items-center gap-3 px-3 py-2">
+            <div className="w-8 h-8 rounded-full bg-brand-primary border border-[#6B8F71] text-white flex items-center justify-center font-bold text-xs shadow-md">
+              PR
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="text-sm font-semibold text-white leading-tight">Pavan R.</span>
+              <span className="text-[10px] text-[#AEC3B0]">Pro Member</span>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-text-primary truncate">{user?.email ?? 'User'}</p>
-            <p className="text-[10px] text-text-muted">Free Plan</p>
-          </div>
+          <button 
+            onClick={toggleTheme}
+            className="p-2 text-[#AEC3B0] hover:text-white hover:bg-[#18291E] rounded-md transition-all duration-200"
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
         </div>
       </div>
     </aside>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Briefcase, X, GripVertical } from 'lucide-react'
+import { Plus, X, GripVertical } from 'lucide-react'
 
 type Status = 'applied' | 'oa' | 'interview' | 'offer' | 'rejected'
 interface App { id: number; company: string; role: string; status: Status; date: string }
@@ -100,11 +100,10 @@ export default function ApplicationsPage() {
 
             <div className="space-y-2 min-h-[200px]">
               {apps.filter(a => a.status === col.key).map(app => (
-                <motion.div
+                <div
                   key={app.id}
-                  layout
                   draggable
-                  onDragStart={e => e.dataTransfer.setData('appId', app.id.toString())}
+                  onDragStart={e => (e as React.DragEvent<HTMLDivElement>).dataTransfer.setData('appId', app.id.toString())}
                   className="card p-3 cursor-grab active:cursor-grabbing hover:border-accent/30 transition-all group"
                 >
                   <div className="flex items-start gap-2">
@@ -115,7 +114,7 @@ export default function ApplicationsPage() {
                       <p className="text-[10px] text-text-muted mt-1.5">{app.date}</p>
                     </div>
                   </div>
-                </motion.div>
+                </div>
               ))}
             </div>
           </div>
