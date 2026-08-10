@@ -1,9 +1,9 @@
 import React from 'react'
-import AppLayout from '../../components/layout/AppLayout'
-import { Card } from '../../components/ui/Card'
-import { Button } from '../../components/ui/Button'
-import { Badge } from '../../components/ui/Badge'
-import { ProgressBar } from '../../components/ui/ProgressBar'
+import AppLayout from '@/components/layout/AppLayout'
+import { Card } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
+import { Badge } from '@/components/ui/Badge'
+import { ProgressBar } from '@/components/ui/ProgressBar'
 import {
   Award,
   Target,
