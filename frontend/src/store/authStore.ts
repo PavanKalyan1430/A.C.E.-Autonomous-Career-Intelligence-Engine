@@ -13,9 +13,9 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      user: { id: 1, email: "developer@ace.ai", is_active: true, created_at: new Date().toISOString() },
-      token: "dummy-bypass-token",
-      isAuthenticated: true,
+      user: null,
+      token: null,
+      isAuthenticated: false,
       setAuth: (user, token) => set({ user, token, isAuthenticated: true }),
       logout: () => set({ user: null, token: null, isAuthenticated: false }),
     }),

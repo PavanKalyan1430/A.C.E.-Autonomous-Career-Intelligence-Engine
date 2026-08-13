@@ -27,16 +27,22 @@ export default function LoginPage() {
   const onSubmit = async (data: FormData) => {
     try {
       setError('')
-      // Bypass database login calls entirely
+      const loginRes = await authApi.login(data.email, data.password)
+      const token = loginRes.data.access_token
+      
+      // Temporary token set to allow authApi.me() interceptor to use it
       setAuth({
-        id: 1,
+        id: 0,
         email: data.email,
         is_active: true,
         created_at: new Date().toISOString()
-      }, "dummy-bypass-token")
+      }, token)
+      
+      const meRes = await authApi.me()
+      setAuth(meRes.data, token)
       navigate('/dashboard')
-    } catch {
-      setError('Invalid credentials. Please try again.')
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Invalid credentials. Please try again.')
     }
   }
 

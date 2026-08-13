@@ -43,14 +43,16 @@ class ResumeParserService:
         """
         try:
             if hasattr(client, "models"):
-                response = client.models.generate_content(
+                response = await client.aio.models.generate_content(
                     model="gemini-1.5-flash",
                     contents=prompt,
                     config={"response_mime_type": "application/json"}
                 )
                 data = json.loads(response.text)
             else:
-                response = client.generate_content(
+                import asyncio
+                response = await asyncio.to_thread(
+                    client.generate_content,
                     prompt,
                     generation_config={"response_mime_type": "application/json"}
                 )

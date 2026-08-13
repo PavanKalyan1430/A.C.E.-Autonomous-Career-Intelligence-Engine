@@ -9,6 +9,8 @@ import SignupPage from '@/pages/SignupPage'
 import DashboardPage from '@/pages/DashboardPage'
 import ResumePage from '@/pages/ResumePage'
 import CompaniesPage from '@/pages/CompaniesPage'
+import JobsPage from '@/pages/JobsPage'
+import SkillsPage from '@/pages/SkillsPage'
 import CareerPage from '@/pages/CareerPage'
 import ApplicationsPage from '@/pages/ApplicationsPage'
 import InterviewsPage from '@/pages/InterviewsPage'
@@ -21,11 +23,13 @@ const queryClient = new QueryClient({
 })
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  return isAuthenticated ? <Navigate to="/dashboard" replace /> : <>{children}</>
 }
 
 export default function App() {
@@ -45,6 +49,8 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/resume" element={<ResumePage />} />
             <Route path="/companies" element={<CompaniesPage />} />
+            <Route path="/jobs" element={<JobsPage />} />
+            <Route path="/skills" element={<SkillsPage />} />
             <Route path="/career" element={<CareerPage />} />
             <Route path="/applications" element={<ApplicationsPage />} />
             <Route path="/interviews" element={<InterviewsPage />} />

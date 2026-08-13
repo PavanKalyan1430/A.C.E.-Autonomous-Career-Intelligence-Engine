@@ -22,8 +22,9 @@ class CompanyIntelligenceService:
         
         if self.client:
             try:
+                import asyncio
                 query = f"{company_name} engineering tech stack interview process questions hiring trends"
-                response = self.client.search(query=query, max_results=5)
+                response = await asyncio.to_thread(self.client.search, query=query, max_results=5)
                 results = response.get("results", [])
                 sources = [r.get("url") for r in results if r.get("url")]
                 snippets = " ".join([r.get("content", "") for r in results if r.get("content")])
@@ -45,7 +46,7 @@ class CompanyIntelligenceService:
                     f"Return JSON format with keys: 'tech_stack' (list of technologies), 'interview_process' (summary of coding/system design stages), "
                     f"and 'hiring_trends' (current engineering focus areas)."
                 )
-                res = client.models.generate_content(
+                res = await client.aio.models.generate_content(
                     model="gemini-1.5-flash",
                     contents=prompt,
                     config={"response_mime_type": "application/json"}

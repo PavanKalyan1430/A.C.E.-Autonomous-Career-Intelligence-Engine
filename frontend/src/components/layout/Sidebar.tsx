@@ -26,13 +26,13 @@ export const Sidebar: React.FC = () => {
     {
       label: 'Overview',
       items: [
-        { name: 'Dashboard', path: '/', icon: <LayoutDashboard size={18} /> },
+        { name: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard size={18} /> },
       ]
     },
     {
       label: 'Career Intelligence',
       items: [
-        { name: 'AI Career Agent', path: '/agent', icon: <BrainCircuit size={18} /> },
+        { name: 'AI Career Agent', path: '/career', icon: <BrainCircuit size={18} /> },
         { name: 'Resume Intelligence', path: '/resume', icon: <FileText size={18} /> },
         { name: 'Job Intelligence', path: '/jobs', icon: <Target size={18} /> },
         { name: 'Skill Roadmap', path: '/skills', icon: <Map size={18} /> },
@@ -42,7 +42,7 @@ export const Sidebar: React.FC = () => {
     {
       label: 'Interview',
       items: [
-        { name: 'Mock Interview', path: '/interview', icon: <MessageSquare size={18} /> },
+        { name: 'Mock Interview', path: '/interviews', icon: <MessageSquare size={18} /> },
       ]
     },
     {
@@ -110,10 +110,19 @@ export const Sidebar: React.FC = () => {
 
       {/* Footer / System */}
       <div className="p-4 border-t border-[#18291E] space-y-1 bg-[#092015]">
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-[#AEC3B0] hover:bg-[#18291E] hover:text-white transition-all duration-200">
+        <NavLink 
+          to="/settings"
+          className={({ isActive }) => 
+            `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              isActive 
+                ? 'bg-brand-primary text-white shadow-[0_0_8px_rgba(51,102,89,0.8)]' 
+                : 'text-[#AEC3B0] hover:bg-[#18291E] hover:text-white'
+            }`
+          }
+        >
           <Settings size={18} className="opacity-70" />
           Settings
-        </button>
+        </NavLink>
         <div className="flex items-center justify-between mt-2 pt-2">
           <div className="flex items-center gap-3 px-3 py-2">
             <div className="w-8 h-8 rounded-full bg-brand-primary border border-[#6B8F71] text-white flex items-center justify-center font-bold text-xs shadow-md">

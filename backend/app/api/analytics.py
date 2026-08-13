@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import func
+from sqlalchemy import func, cast, Integer
 import datetime
 
 from app.api.deps import get_current_user
@@ -27,7 +27,7 @@ async def get_dashboard_metrics(
 
     # 2. Real Average mock interview score from completed sessions
     interview_result = await db.execute(
-        select(func.avg(InterviewSession.feedback["score"].cast(func.Integer)))
+        select(func.avg(cast(InterviewSession.feedback["score"].astext, Integer)))
         .filter(InterviewSession.user_id == current_user.id, InterviewSession.is_completed == True)
     )
     avg_score = interview_result.scalar()
@@ -42,17 +42,31 @@ async def get_dashboard_metrics(
     # 4. Dynamic Monthly Timeline Aggregation from DB timestamps
     six_months_ago = datetime.datetime.utcnow() - datetime.timedelta(days=180)
     
+    is_postgresql = False
+    try:
+        if db.bind and "postgresql" in db.bind.dialect.name:
+            is_postgresql = True
+    except Exception:
+        pass
+
+    if is_postgresql:
+        app_date_expr = func.to_char(Application.created_at, 'YYYY-MM')
+        int_date_expr = func.to_char(InterviewSession.created_at, 'YYYY-MM')
+    else:
+        app_date_expr = func.strftime('%Y-%m', Application.created_at)
+        int_date_expr = func.strftime('%Y-%m', InterviewSession.created_at)
+
     monthly_apps_res = await db.execute(
-        select(func.strftime('%Y-%m', Application.created_at), func.count(Application.id))
+        select(app_date_expr, func.count(Application.id))
         .filter(Application.user_id == current_user.id, Application.created_at >= six_months_ago)
-        .group_by(func.strftime('%Y-%m', Application.created_at))
+        .group_by(app_date_expr)
     )
     monthly_apps = {month: count for month, count in monthly_apps_res.all() if month}
 
     monthly_interviews_res = await db.execute(
-        select(func.strftime('%Y-%m', InterviewSession.created_at), func.count(InterviewSession.id))
+        select(int_date_expr, func.count(InterviewSession.id))
         .filter(InterviewSession.user_id == current_user.id, InterviewSession.created_at >= six_months_ago)
-        .group_by(func.strftime('%Y-%m', InterviewSession.created_at))
+        .group_by(int_date_expr)
     )
     monthly_interviews = {month: count for month, count in monthly_interviews_res.all() if month}
 

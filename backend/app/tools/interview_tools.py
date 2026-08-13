@@ -39,7 +39,7 @@ async def generate_interview_questions_tool(role_title: str, tech_stack_or_jd: s
                 f"concurrency, and system design related to: {', '.join(skills)}.\n"
                 f"Return JSON format with key 'questions' containing a list of 3 strings."
             )
-            response = client.models.generate_content(
+            response = await client.aio.models.generate_content(
                 model="gemini-1.5-flash",
                 contents=prompt,
                 config={"response_mime_type": "application/json"}
@@ -83,7 +83,7 @@ async def evaluate_star_interview_tool(question: str, user_answer: str) -> str:
                 f"and quantifiable impact metrics.\n"
                 f"Return JSON with keys: 'technical_score' (0-100), 'strengths', 'weaknesses', 'star_coverage_assessment', 'improvement_suggestions'."
             )
-            response = client.models.generate_content(
+            response = await client.aio.models.generate_content(
                 model="gemini-1.5-flash",
                 contents=prompt,
                 config={"response_mime_type": "application/json"}
