@@ -1,20 +1,40 @@
 import datetime
 from typing import Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 
 class UserBase(BaseModel):
     email: EmailStr
-    is_active: Optional[bool] = True
-    is_superuser: Optional[bool] = False
 
 class UserCreate(UserBase):
     password: str
 
-class UserUpdate(UserBase):
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long.")
+        if len(v) > 128:
+            raise ValueError("Password must be at most 128 characters long.")
+        return v
+
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
     password: Optional[str] = None
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            if len(v) < 8:
+                raise ValueError("Password must be at least 8 characters long.")
+            if len(v) > 128:
+                raise ValueError("Password must be at most 128 characters long.")
+        return v
 
 class UserResponse(UserBase):
     id: int
+    is_active: bool
+    is_superuser: bool
     created_at: datetime.datetime
 
     class Config:
@@ -26,3 +46,16 @@ class Token(BaseModel):
 
 class TokenPayload(BaseModel):
     sub: Optional[str] = None
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password_strength(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long.")
+        if len(v) > 128:
+            raise ValueError("Password must be at most 128 characters long.")
+        return v

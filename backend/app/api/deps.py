@@ -24,29 +24,33 @@ async def get_current_user(
             token, settings.SECRET_KEY, algorithms=[ALGORITHM]
         )
         token_data = TokenPayload(**payload)
-    except (JWTError, Exception):
+        if not token_data.sub:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user_id = int(token_data.sub)
+    except (JWTError, ValueError, Exception):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
-        )
-    
-    if not token_data.sub:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid token payload",
+            headers={"WWW-Authenticate": "Bearer"},
         )
         
-    result = await db.execute(select(User).filter(User.id == int(token_data.sub)))
+    result = await db.execute(select(User).filter(User.id == user_id))
     user = result.scalars().first()
     
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     if not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Inactive user",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     return user
