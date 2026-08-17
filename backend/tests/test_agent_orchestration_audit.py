@@ -23,43 +23,29 @@ def anyio_backend():
 
 @pytest.fixture(scope="function")
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    if os.path.exists("test_orchestration_temp_db.sqlite"):
-        try:
-            os.remove("test_orchestration_temp_db.sqlite")
-        except Exception:
-            pass
-            
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     
     async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
         
     async with async_session() as session:
         yield session
         
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
-    
-    if os.path.exists("test_orchestration_temp_db.sqlite"):
-        try:
-            os.remove("test_orchestration_temp_db.sqlite")
-        except Exception:
-            pass
 
 @pytest.fixture(scope="function")
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
-    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    
     async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
-        async with async_session() as session:
-            yield session
+        yield db_session
             
     app.dependency_overrides[get_db] = override_get_db
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
-    await engine.dispose()
 
 @pytest.fixture(scope="function")
 async def test_user(db_session: AsyncSession) -> User:

@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { resumeApi } from '@/api'
+import { resumeApi, careerApi } from '@/api'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -348,7 +348,7 @@ export default function SkillsPage() {
                     <div>
                       <h4 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest mb-1.5">Prerequisites</h4>
                       <div className="space-y-1">
-                        {activeNode.prereqs.map((p, idx) => (
+                        {activeNode.prereqs.map((p: { name: string; met: boolean }, idx: number) => (
                           <div key={idx} className="flex items-center gap-1.5 text-2xs font-semibold">
                             <span className={p.met ? 'text-success' : 'text-neutral-300 dark:text-neutral-700'}>
                               ✓
