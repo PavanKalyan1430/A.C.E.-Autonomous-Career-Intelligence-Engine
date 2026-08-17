@@ -135,13 +135,19 @@ export default function DashboardPage() {
   const displayGreeting = `Greetings ${userName.charAt(0).toUpperCase() + userName.slice(1)}`
 
   // Calculate live values based on backend API schema responses
-  const activeApplications = analytics?.funnel ? (
-    (analytics.funnel.applied || 0) + 
-    (analytics.funnel.interviewing || 0) + 
-    (analytics.funnel.offer || 0)
-  ) : 0
-  const interviewReadiness = analytics?.average_interview_score || 78
-  const totalSessions = analytics?.total_sessions || 0
+  const overview = analytics?.overview
+  const skillAnalytics = analytics?.skill_analytics
+  const companyAnalytics = analytics?.company_analytics
+  const insightsList = analytics?.insights && analytics.insights.length > 0 ? analytics.insights : MOCK_INSIGHTS
+  const activityList = analytics?.recent_activity && analytics.recent_activity.length > 0 ? analytics.recent_activity : MOCK_ACTIVITIES
+  const skillProgress = skillAnalytics?.skill_progress && skillAnalytics.skill_progress.length > 0 ? skillAnalytics.skill_progress : MOCK_SKILLS
+  const jobMatches = companyAnalytics?.top_job_matches && companyAnalytics.top_job_matches.length > 0 ? companyAnalytics.top_job_matches : MOCK_JOB_MATCHES
+
+  const careerScore = overview?.career_score || 80
+  const jobMatchPercentage = overview?.job_match_percentage || 82
+  const activeApplications = overview?.active_applications || 0
+  const interviewReadiness = overview?.interview_score || 0
+  const totalSessions = overview?.completed_interviews || 0
 
   const isLoading = isAnalyticsLoading || isResumeLoading
 
@@ -293,12 +299,12 @@ export default function DashboardPage() {
           </div>
           <h3 className="text-2xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Career Score</h3>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-3xl font-bold text-[#3d3d3d] dark:text-white tracking-tight">85</span>
+            <span className="text-3xl font-bold text-[#3d3d3d] dark:text-white tracking-tight">{careerScore}</span>
             <span className="text-sm font-medium text-neutral-400 dark:text-neutral-500">/ 100</span>
           </div>
           <div className="mt-3 text-2xs font-medium text-success flex items-center gap-1">
             <TrendingUp size={14} />
-            8% vs last month
+            Diagnostics updated
           </div>
         </Card>
 
@@ -309,7 +315,7 @@ export default function DashboardPage() {
           </div>
           <h3 className="text-2xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Job Match</h3>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-3xl font-bold text-[#3d3d3d] dark:text-white tracking-tight">82%</span>
+            <span className="text-3xl font-bold text-[#3d3d3d] dark:text-white tracking-tight">{jobMatchPercentage}%</span>
           </div>
           <div className="mt-3 text-2xs font-medium text-neutral-600 dark:text-neutral-400">
             Strong match overall
@@ -453,19 +459,19 @@ export default function DashboardPage() {
           </div>
 
           <div className="space-y-1">
-            {MOCK_JOB_MATCHES.map((job, idx) => (
+            {jobMatches.map((job: any, idx: number) => (
               <div 
                 key={idx} 
                 className="flex items-center justify-between p-3 -mx-3 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800/80 transition-all duration-200 group cursor-pointer"
                 onClick={() => navigate('/companies')}
               >
                 <div className="flex items-center gap-3 transform group-hover:translate-x-1 transition-transform">
-                  <div className={`w-10 h-10 ${job.bg} rounded-lg flex items-center justify-center text-white font-bold shadow-sm`}>
-                    {job.initial}
+                  <div className={`w-10 h-10 ${job.bg || 'bg-brand-primary'} rounded-lg flex items-center justify-center text-white font-bold shadow-sm`}>
+                    {job.initial || job.company.charAt(0)}
                   </div>
                   <div>
                     <h4 className="font-bold text-[#3d3d3d] dark:text-white text-sm">{job.company}</h4>
-                    <p className="text-xs font-medium text-neutral-500">{job.role} · {job.location}</p>
+                    <p className="text-xs font-medium text-neutral-500">{job.role} · {job.location || 'Remote'}</p>
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
@@ -488,7 +494,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="space-y-4">
-            {MOCK_SKILLS.map((item, idx) => (
+            {skillProgress.map((item: any, idx: number) => (
               <div key={idx}>
                 <div className="flex justify-between items-end mb-1.5 text-xs">
                   <div className="flex items-center gap-2">
@@ -519,10 +525,10 @@ export default function DashboardPage() {
         <Card>
           <h2 className="text-base font-bold text-[#3d3d3d] dark:text-white mb-6">Career Insights</h2>
           <div className="space-y-4">
-            {MOCK_INSIGHTS.map((insight, idx) => (
+            {insightsList.map((insight: any, idx: number) => (
               <div key={idx} className="flex gap-3 items-start p-3 bg-neutral-50 dark:bg-neutral-800/40 rounded-lg border border-neutral-100 dark:border-[#1E293B]">
                 <div className="p-1.5 bg-white dark:bg-[#0D1117] rounded-md shadow-sm">
-                  {insight.icon}
+                  {insight.icon || <Lightbulb size={16} className="text-[#0891B2]" />}
                 </div>
                 <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 leading-relaxed">
                   {insight.text}
@@ -536,7 +542,7 @@ export default function DashboardPage() {
         <Card>
           <h2 className="text-base font-bold text-[#3d3d3d] dark:text-white mb-6">Recent Activity</h2>
           <div className="relative pl-4 border-l border-neutral-200 dark:border-neutral-800 space-y-5">
-            {MOCK_ACTIVITIES.map((activity, idx) => (
+            {activityList.map((activity: any, idx: number) => (
               <div key={idx} className="relative">
                 <span className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-brand-primary border-2 border-white dark:border-[#0D1117]" />
                 <div className="flex justify-between items-start gap-4">
