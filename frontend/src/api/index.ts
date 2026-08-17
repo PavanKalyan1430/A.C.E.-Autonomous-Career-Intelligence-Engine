@@ -74,6 +74,13 @@ export const analyticsApi = {
   getDashboard: () => api.get('/analytics/dashboard'),
 }
 
+// ─── Career Intelligence ─────────────────────────────────────────────────────
+export const careerApi = {
+  getProfile: () => api.get('/career/profile'),
+  getIntelligence: () => api.get('/career/intelligence'),
+  refresh: () => api.post('/career/refresh'),
+}
+
 // ─── Applications ────────────────────────────────────────────────────────────
 export const applicationsApi = {
   create: (payload: { company_name: string; role_title: string; status?: string; jd_text?: string }) =>

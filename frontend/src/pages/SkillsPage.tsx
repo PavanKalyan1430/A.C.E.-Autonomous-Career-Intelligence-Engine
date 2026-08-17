@@ -101,7 +101,7 @@ export default function SkillsPage() {
   const [targetRole, setTargetRole] = useState('Backend Engineer')
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>('kubernetes')
 
-  // 1. Fetch resume parser details to enrich readiness status
+  // 1. Fetch resume parser details
   const { data: resume, isLoading: isResumeLoading } = useQuery({
     queryKey: ['latestResume'],
     queryFn: async () => {
@@ -111,11 +111,28 @@ export default function SkillsPage() {
     retry: false
   })
 
-  // Get active selected node
-  const activeNode = selectedNodeId ? MOCK_NODES[selectedNodeId] : null
+  // 2. Fetch live career intelligence DAG & recommendations
+  const { data: careerIntel, isLoading: isIntelLoading } = useQuery({
+    queryKey: ['careerIntelligence'],
+    queryFn: async () => {
+      const res = await careerApi.getIntelligence()
+      return res.data
+    },
+    retry: false
+  })
+
+  // Active selected node or dynamic node from API
+  const dynamicRoadmap = careerIntel?.learning_roadmap || []
+  const coveragePercentage = careerIntel?.skill_alignment?.coverage_percentage || 72
+
+  const activeNode = selectedNodeId ? (
+    dynamicRoadmap.find((n: any) => n.id === selectedNodeId) || MOCK_NODES[selectedNodeId] || MOCK_NODES['kubernetes']
+  ) : MOCK_NODES['kubernetes']
+
+  const isLoading = isResumeLoading || isIntelLoading
 
   // Loading skeleton
-  if (isResumeLoading) {
+  if (isLoading) {
     return (
       <div className="flex flex-col gap-6 animate-fade-in">
         <div className="flex justify-between items-end mb-2">
@@ -184,9 +201,9 @@ export default function SkillsPage() {
           <div className="w-full sm:w-80">
             <div className="flex justify-between items-end text-xs font-semibold mb-1.5">
               <span className="text-neutral-400 dark:text-neutral-500">Career Readiness</span>
-              <span className="text-brand-primary font-bold">72%</span>
+              <span className="text-brand-primary font-bold">{coveragePercentage}%</span>
             </div>
-            <ProgressBar value={72} variant="blue" />
+            <ProgressBar value={coveragePercentage} variant="blue" />
           </div>
         </div>
       </Card>

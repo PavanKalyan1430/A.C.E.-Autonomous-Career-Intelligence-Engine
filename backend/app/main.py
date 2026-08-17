@@ -12,6 +12,7 @@ from app.api.memory import router as memory_router
 from app.api.interview import router as interview_router
 from app.api.applications import router as application_router
 from app.api.analytics import router as analytics_router
+from app.api.career import router as career_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -45,6 +46,7 @@ app.include_router(memory_router, prefix=settings.API_V1_STR)
 app.include_router(interview_router, prefix=settings.API_V1_STR)
 app.include_router(application_router, prefix=settings.API_V1_STR)
 app.include_router(analytics_router, prefix=settings.API_V1_STR)
+app.include_router(career_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def read_root():

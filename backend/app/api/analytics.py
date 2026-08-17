@@ -195,13 +195,21 @@ async def get_dashboard_metrics(
     res_companies = await db.execute(select(Company).limit(5))
     db_companies = list(res_companies.scalars().all())
     companies_count = len(db_companies)
-    target_companies_list = [c.name for c in db_companies] if db_companies else ["Stripe", "Google", "Swiggy"]
+    target_companies_list = list(set([app_obj.company_name for app_obj in user_applications if app_obj.company_name] + [c.name for c in db_companies]))
 
-    top_job_matches: List[JobMatchItem] = [
-        JobMatchItem(company="Stripe", role="Senior Backend Engineer", location="Remote", initial="S", bg="bg-brand-primary", match=92),
-        JobMatchItem(company="Google", role="Staff Software Engineer", location="Hybrid", initial="G", bg="bg-blue-600", match=87),
-        JobMatchItem(company="Swiggy", role="Backend Engineer", location="Bangalore", initial="S", bg="bg-orange-500", match=84)
-    ]
+    top_job_matches: List[JobMatchItem] = []
+    for app_obj in user_applications[:3]:
+        m_score = 80
+        if app_obj.analysis and isinstance(app_obj.analysis, dict):
+            m_score = int(app_obj.analysis.get("match_percentage", 80))
+        top_job_matches.append(JobMatchItem(
+            company=app_obj.company_name,
+            role=app_obj.role_title,
+            location="Remote",
+            initial=app_obj.company_name[0].upper() if app_obj.company_name else "A",
+            bg="bg-brand-primary",
+            match=m_score
+        ))
 
     # 7. Deterministic Recommendations Engine
     recommendations: List[RecommendationItem] = []
