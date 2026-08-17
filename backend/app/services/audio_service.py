@@ -2,37 +2,36 @@ import io
 import json
 import logging
 import os
+import asyncio
 from typing import Dict, Any, Optional
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-_groq_client = None
-
-def get_groq_client():
-    global _groq_client
-    if _groq_client is None:
-        api_key = settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY")
-        if api_key:
-            try:
-                from groq import Groq
-                _groq_client = Groq(api_key=api_key)
-                logger.info("Groq Cloud Client initialized successfully for whisper-large-v3-turbo STT.")
-            except ImportError:
-                logger.warning("groq package not installed. Falling back to Gemini Multimodal STT.")
-                _groq_client = None
-            except Exception as e:
-                logger.warning(f"Error initializing Groq client: {e}")
-                _groq_client = None
-    return _groq_client
+def _build_groq_client():
+    """Build a fresh Groq client using the current settings value (not a module-level cache).
+    This ensures that API key patches in tests are picked up at call time."""
+    api_key = settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        return None
+    try:
+        from groq import Groq
+        return Groq(api_key=api_key)
+    except ImportError:
+        logger.warning("groq package not installed.")
+        return None
+    except Exception as e:
+        logger.warning(f"Error building Groq client: {e}")
+        return None
 
 
 class AudioTranscriptionService:
     """
     SOTA In-Memory Audio Transcription Service.
     Primary Engine: Groq Cloud (whisper-large-v3-turbo) ~150ms latency.
-    Fallback Engine: Google Gemini 1.5 Flash Multimodal Audio.
+    Fallback Engine: Google Gemini 3.6 Flash Multimodal Audio.
     Zero-Disk Storage: 100% in-memory RAM processing with instant RAM purging.
+    Note: Groq client is built fresh per-call to honour live settings/test patches.
     """
 
     async def transcribe_in_memory_audio(
@@ -44,66 +43,76 @@ class AudioTranscriptionService:
         if not audio_bytes:
             return {"transcript": "", "duration_seconds": 0.0, "engine": "none", "error": "Empty audio buffer"}
 
-        # 1. Try Primary Engine: Groq Cloud (whisper-large-v3-turbo) ~150ms STT
-        groq_client = get_groq_client()
+        # 1. Try Primary Engine: Groq Cloud (whisper-large-v3-turbo)
+        #    Build the client fresh every call so test-time GROQ_API_KEY patches are honoured.
+        groq_client = _build_groq_client()
         if groq_client:
             try:
-                # Wrap bytes in BytesIO buffer for Groq SDK
                 buffer = io.BytesIO(audio_bytes)
                 buffer.name = filename
                 
-                transcription = groq_client.audio.transcriptions.create(
-                    file=(filename, buffer.read()),
-                    model="whisper-large-v3-turbo",
-                    response_format="json",
-                    temperature=0.0
-                )
+                async def _groq_transcribe():
+                    return groq_client.audio.transcriptions.create(
+                        file=(filename, buffer.read()),
+                        model="whisper-large-v3-turbo",
+                        response_format="json",
+                        temperature=0.0
+                    )
                 
+                transcription = await asyncio.wait_for(
+                    asyncio.to_thread(groq_client.audio.transcriptions.create,
+                        file=(filename, buffer.read()),
+                        model="whisper-large-v3-turbo",
+                        response_format="json",
+                        temperature=0.0
+                    ),
+                    timeout=settings.STT_TIMEOUT
+                )
                 transcript_text = transcription.text.strip() if hasattr(transcription, "text") else str(transcription).strip()
                 estimated_duration = max(round(len(transcript_text.split()) / 2.3, 2), 1.0)
-                
-                # In-memory RAM buffer purge
                 del buffer
                 del audio_bytes
-                
+                logger.info(f"Groq Whisper STT succeeded. Transcript length: {len(transcript_text)} chars.")
                 return {
                     "transcript": transcript_text,
                     "duration_seconds": estimated_duration,
                     "engine": "groq-whisper-large-v3-turbo"
                 }
             except Exception as e:
-                logger.error(f"Groq Cloud transcription error: {e}. Executing Gemini Multimodal STT fallback.")
+                logger.error(f"Groq Cloud STT error: {e}. Falling back to Gemini Multimodal STT.")
 
-        # 2. Try Fallback Engine: Google Gemini 1.5 Flash Multimodal Audio
+        # 2. Fallback Engine: Google Gemini 3.6 Flash Multimodal Audio
         gemini_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY")
         if gemini_key:
             try:
                 from google import genai
                 client = genai.Client(api_key=gemini_key)
-                
+                logger.info("Attempting Gemini 3.6 Flash multimodal STT fallback.")
                 prompt = "Transcribe the spoken audio response verbatim into text without summarization or commentary."
-                response = client.models.generate_content(
-                    model="gemini-1.5-flash",
-                    contents=[
-                        genai.types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
-                        prompt
-                    ]
+                
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        client.models.generate_content,
+                        model="gemini-3.6-flash",
+                        contents=[
+                            genai.types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
+                            prompt
+                        ]
+                    ),
+                    timeout=settings.STT_TIMEOUT
                 )
                 transcript_text = response.text.strip()
                 estimated_duration = max(round(len(transcript_text.split()) / 2.3, 2), 1.0)
-                
-                # In-memory RAM buffer purge
                 del audio_bytes
-                
+                logger.info(f"Gemini 3.6 Flash STT fallback succeeded. Transcript length: {len(transcript_text)} chars.")
                 return {
                     "transcript": transcript_text,
                     "duration_seconds": estimated_duration,
-                    "engine": "gemini-1.5-flash-audio"
+                    "engine": "gemini-3.6-flash-audio"
                 }
             except Exception as e:
                 logger.error(f"Gemini Multimodal STT error: {e}")
 
-        # In-memory RAM buffer purge fallback
         del audio_bytes
         return {
             "transcript": "",

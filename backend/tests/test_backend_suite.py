@@ -4,13 +4,6 @@ import asyncio
 import json
 import logging
 import datetime
-import ssl
-
-try:
-    ssl._create_default_https_context = ssl._create_unverified_context
-except AttributeError:
-    pass
-
 # Ensure backend root directory is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -153,20 +146,20 @@ class PrincipalQATestSuite:
         print("="*80)
 
         try:
-            same_res = production_nlp_service.compute_semantic_similarity("Python FastAPI Microservices", "Python FastAPI Microservices")
+            same_res = await production_nlp_service.compute_semantic_similarity("Python FastAPI Microservices", "Python FastAPI Microservices")
             if same_res["cosine_similarity_score"] < 0.99:
                 self.record_flag("MEDIUM", "NLP.SentenceTransformers", "Identical text score < 0.99")
             else:
                 self.record_pass("NLP.SentenceTransformers", f"Identical text Cosine Score: {same_res['cosine_similarity_score']}")
 
-            empty_res = production_nlp_service.compute_semantic_similarity("", "Backend Engineer")
+            empty_res = await production_nlp_service.compute_semantic_similarity("", "Backend Engineer")
             self.record_pass("NLP.SentenceTransformers", f"Empty string edge-case handled safely (Match: {empty_res['match_percentage']}%)")
         except Exception as e:
             self.record_flag("HIGH", "NLP.SentenceTransformers", f"Dense embedding exception: {e}")
 
         try:
             hesitation_sample = "Um, uh, basically, I reduced API latency by 40% using Redis caching, like, you know."
-            ling = production_nlp_service.extract_linguistic_features(hesitation_sample)
+            ling = await production_nlp_service.extract_linguistic_features(hesitation_sample)
             
             raw_entities = ling.get("extracted_entities", [])
             interjections = [ent["text"] for ent in raw_entities if ent.get("label") in ["INTJ", "DISCOURSE"]]
@@ -179,7 +172,7 @@ class PrincipalQATestSuite:
         try:
             skills = ["Python", "Docker"]
             jd = "Requirements: Python, FastAPI, Docker, Kubernetes, Distributed Systems, Microservices."
-            dag_output = production_nlp_service.compute_dynamic_skill_graph_gap(skills, jd)
+            dag_output = await production_nlp_service.compute_dynamic_skill_graph_gap(skills, jd)
             
             if "topological_learning_order" not in dag_output or "missing_skills" not in dag_output:
                 self.record_flag("HIGH", "NLP.NetworkX", "DAG output missing required keys")
@@ -245,7 +238,7 @@ class PrincipalQATestSuite:
             self.record_flag("HIGH", "Tools.Interview", f"Interview tool exception: {e}")
 
         try:
-            dag_tool_res = compute_topological_skill_gap_tool.invoke({
+            dag_tool_res = await compute_topological_skill_gap_tool.ainvoke({
                 "candidate_skills": ["Python", "PostgreSQL"],
                 "target_job_description": "Senior Backend Engineer with Python, FastAPI, Docker, and Kubernetes expertise."
             })
@@ -255,7 +248,7 @@ class PrincipalQATestSuite:
             self.record_flag("HIGH", "Tools.SkillDAG", f"Skill DAG tool exception: {e}")
 
         try:
-            sim_tool_res = nlp_semantic_similarity_tool.invoke({
+            sim_tool_res = await nlp_semantic_similarity_tool.ainvoke({
                 "resume_or_profile_text": "Python Developer with microservice architecture",
                 "job_description_text": "Senior Python Backend Engineer"
             })

@@ -3,10 +3,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func, cast, Integer
 import datetime
+import logging
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.user import User, Application, InterviewSession, ApplicationStatus
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -27,7 +30,7 @@ async def get_dashboard_metrics(
 
     # 2. Real Average mock interview score from completed sessions
     interview_result = await db.execute(
-        select(func.avg(cast(InterviewSession.feedback["score"].astext, Integer)))
+        select(func.avg(cast(InterviewSession.feedback["overall_score"].astext, Integer)))
         .filter(InterviewSession.user_id == current_user.id, InterviewSession.is_completed == True)
     )
     avg_score = interview_result.scalar()
@@ -46,8 +49,8 @@ async def get_dashboard_metrics(
     try:
         if db.bind and "postgresql" in db.bind.dialect.name:
             is_postgresql = True
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Could not check db bind dialect name: {e}")
 
     if is_postgresql:
         app_date_expr = func.to_char(Application.created_at, 'YYYY-MM')

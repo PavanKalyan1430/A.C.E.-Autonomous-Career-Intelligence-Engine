@@ -15,16 +15,44 @@ from app.tools.memory_tools import retrieve_user_memory_tool
 
 logger = logging.getLogger(__name__)
 
+
+def wrap_tool_with_budget(t):
+    orig_func = t.func
+    orig_coroutine = t.coroutine
+    
+    def increment_and_check_tool_calls():
+        from app.core.config import tool_calls_counter, settings
+        tracker = tool_calls_counter.get()
+        if tracker is not None:
+            if tracker.get("count", 0) >= settings.AGENT_MAX_TOOL_CALLS:
+                raise ValueError("Agent tool call limit exceeded")
+            tracker["count"] = tracker.get("count", 0) + 1
+
+    if orig_func is not None:
+        def wrapped_func(*args, **kwargs):
+            increment_and_check_tool_calls()
+            return orig_func(*args, **kwargs)
+        t.func = wrapped_func
+        
+    if orig_coroutine is not None:
+        async def wrapped_coroutine(*args, **kwargs):
+            increment_and_check_tool_calls()
+            return await orig_coroutine(*args, **kwargs)
+        t.coroutine = wrapped_coroutine
+        
+    return t
+
 # Master Tool Suite for the Autonomous Agent
 TOOLS = [
-    parse_resume_document_tool,
-    nlp_semantic_similarity_tool,
-    compute_topological_skill_gap_tool,
-    search_company_intelligence_tool,
-    generate_interview_questions_tool,
-    evaluate_star_interview_tool,
-    retrieve_user_memory_tool
+    wrap_tool_with_budget(parse_resume_document_tool),
+    wrap_tool_with_budget(nlp_semantic_similarity_tool),
+    wrap_tool_with_budget(compute_topological_skill_gap_tool),
+    wrap_tool_with_budget(search_company_intelligence_tool),
+    wrap_tool_with_budget(generate_interview_questions_tool),
+    wrap_tool_with_budget(evaluate_star_interview_tool),
+    wrap_tool_with_budget(retrieve_user_memory_tool)
 ]
+
 
 # Master System Prompt for Non-Deterministic Reasoning Loop
 SYSTEM_PROMPT = (
@@ -42,13 +70,12 @@ SYSTEM_PROMPT = (
 )
 
 def build_agent():
-    api_key = settings.GEMINI_API_KEY
-    if api_key:
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
-            google_api_key=api_key,
-            temperature=0.2
-        )
+    import os
+    groq_key = settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY")
+    gemini_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY")
+    if groq_key or gemini_key:
+        from app.core.llm_router import RoutedChatModel
+        llm = RoutedChatModel(temperature=0.2)
         try:
             return create_react_agent(llm, tools=TOOLS, prompt=SYSTEM_PROMPT)
         except TypeError:
@@ -58,7 +85,7 @@ def build_agent():
                 logger.error(f"Error initializing create_react_agent: {e}")
                 return create_react_agent(llm, tools=TOOLS)
     else:
-        logger.warning("GEMINI_API_KEY not found. Agent running in production NLP fallback mode.")
+        logger.warning("Neither GROQ_API_KEY nor GEMINI_API_KEY found. Agent running in production NLP fallback mode.")
         return None
 
 agent_executor = build_agent()

@@ -34,7 +34,7 @@ class Profile(Base):
     __tablename__ = "profiles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
     bio: Mapped[str] = mapped_column(String, nullable=True)
     target_role: Mapped[str] = mapped_column(String, nullable=True)
     overall_score: Mapped[int] = mapped_column(Integer, default=0)
@@ -139,8 +139,8 @@ class InterviewFeedback(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    session_id: Mapped[int] = mapped_column(Integer, ForeignKey("interview_sessions.id"), nullable=False)
-    score: Mapped[int] = mapped_column(Integer, default=0)
+    session_id: Mapped[int] = mapped_column(Integer, ForeignKey("interview_sessions.id"), nullable=False, unique=True)
+    overall_score: Mapped[int] = mapped_column(Integer, default=0)
     strengths: Mapped[str] = mapped_column(String, nullable=True)
     weakness_areas: Mapped[list] = mapped_column(JSON, default=list)
     improvements: Mapped[list] = mapped_column(JSON, default=list)

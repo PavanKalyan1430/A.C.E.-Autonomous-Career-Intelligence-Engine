@@ -1,17 +1,17 @@
 import datetime
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Optional, Literal
 
 class ChatMessageCreate(BaseModel):
-    role: str  # "user", "assistant", "system"
-    content: str
+    role: Literal["user"]  # Clients can only generate "user" role messages to prevent impersonating "assistant" or "system"
+    content: str = Field(..., min_length=1, max_length=5000)
     agent_name: Optional[str] = "orchestrator"
     meta_data: Optional[Dict[str, Any]] = None
 
 class ChatMessageResponse(BaseModel):
     id: int
     session_id: int
-    role: str
+    role: Literal["user", "assistant", "system"]
     content: str
     agent_name: str
     meta_data: Dict[str, Any]
@@ -29,7 +29,7 @@ class ChatSessionResponse(BaseModel):
     title: str
     created_at: datetime.datetime
     updated_at: datetime.datetime
-    messages: List[ChatMessageResponse] = []
+    messages: List[ChatMessageResponse] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

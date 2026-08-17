@@ -20,7 +20,7 @@ async def create_application(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    analysis_data = {}
+    analysis_data = None
     
     # Run dynamic vector similarity analysis if JD text is provided and candidate has resume
     if payload.jd_text:
@@ -31,8 +31,8 @@ async def create_application(
         )
         latest_resume = res_result.scalars().first()
         if latest_resume and latest_resume.raw_text:
-            sim_res = production_nlp_service.compute_semantic_similarity(latest_resume.raw_text, payload.jd_text)
-            keyphrases = production_nlp_service.extract_tfidf_keyphrases(payload.jd_text, top_n=5)
+            sim_res = await production_nlp_service.compute_semantic_similarity(latest_resume.raw_text, payload.jd_text)
+            keyphrases = await production_nlp_service.extract_tfidf_keyphrases(payload.jd_text, top_n=5)
             analysis_data = {
                 "match_percentage": sim_res["match_percentage"],
                 "cosine_score": sim_res["cosine_similarity_score"],
@@ -96,14 +96,39 @@ async def update_application(
     if not app_record:
         raise HTTPException(status_code=404, detail="Application not found.")
 
-    if payload.status:
-        app_record.status = payload.status.value
-    if payload.company_name:
-        app_record.company_name = payload.company_name
-    if payload.role_title:
-        app_record.role_title = payload.role_title
-    if payload.jd_text:
-        app_record.jd_text = payload.jd_text
+    update_data = payload.model_dump(exclude_unset=True)
+    
+    if "status" in update_data:
+        app_record.status = update_data["status"].value if update_data["status"] else None
+    if "company_name" in update_data:
+        app_record.company_name = update_data["company_name"]
+    if "role_title" in update_data:
+        app_record.role_title = update_data["role_title"]
+        
+    if "jd_text" in update_data:
+        new_jd = update_data["jd_text"]
+        app_record.jd_text = new_jd
+        
+        # Recompute analysis if new JD text is provided and user has a resume
+        if new_jd and len(new_jd.strip()) > 0:
+            res_result = await db.execute(
+                select(Resume)
+                .filter(Resume.user_id == current_user.id)
+                .order_by(Resume.created_at.desc())
+            )
+            latest_resume = res_result.scalars().first()
+            if latest_resume and latest_resume.raw_text:
+                sim_res = await production_nlp_service.compute_semantic_similarity(latest_resume.raw_text, new_jd)
+                keyphrases = await production_nlp_service.extract_tfidf_keyphrases(new_jd, top_n=5)
+                app_record.analysis = {
+                    "match_percentage": sim_res["match_percentage"],
+                    "cosine_score": sim_res["cosine_similarity_score"],
+                    "required_keyphrases": [kp["keyphrase"] for kp in keyphrases]
+                }
+            else:
+                app_record.analysis = None
+        else:
+            app_record.analysis = None
 
     db.add(app_record)
     await db.commit()

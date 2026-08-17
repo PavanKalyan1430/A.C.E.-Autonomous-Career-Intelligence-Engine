@@ -12,7 +12,7 @@ class SkillDAGInput(BaseModel):
     target_job_description: str = Field(description="Target role title or full job description text")
 
 @tool(args_schema=SkillDAGInput)
-def compute_topological_skill_gap_tool(candidate_skills: Union[List[str], str], target_job_description: str) -> str:
+async def compute_topological_skill_gap_tool(candidate_skills: Union[List[str], str], target_job_description: str) -> str:
     """
     Uses NetworkX Directed Graph algorithms to compute Topological Sort and Shortest Learning Paths.
     """
@@ -26,5 +26,5 @@ def compute_topological_skill_gap_tool(candidate_skills: Union[List[str], str], 
     except Exception:
         skills = [str(candidate_skills)]
         
-    result = production_nlp_service.compute_dynamic_skill_graph_gap(skills, target_job_description)
+    result = await production_nlp_service.compute_dynamic_skill_graph_gap(skills, target_job_description)
     return json.dumps(result, indent=2)

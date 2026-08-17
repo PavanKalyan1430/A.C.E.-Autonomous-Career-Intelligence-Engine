@@ -6,6 +6,9 @@ from langchain_core.tools import tool
 from app.core.config import settings
 from app.services.nlp_service import production_nlp_service
 
+from app.core.genai import get_genai_client
+import asyncio
+
 logger = logging.getLogger(__name__)
 
 class QuestionGenInput(BaseModel):
@@ -23,32 +26,29 @@ async def generate_interview_questions_tool(role_title: str, tech_stack_or_jd: s
     Zero hardcoded question templates.
     """
     # 1. Dynamically extract keyphrases from the job description
-    extracted = production_nlp_service.extract_tfidf_keyphrases(tech_stack_or_jd, top_n=5)
+    extracted = await production_nlp_service.extract_tfidf_keyphrases(tech_stack_or_jd, top_n=5)
     skills = [item["keyphrase"] for item in extracted]
 
     # 2. Generate questions via LLM dynamically
-    api_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY")
-    if api_key:
-        try:
-            from google import genai
-            client = genai.Client(api_key=api_key)
-            prompt = (
-                f"You are a Principal Software Engineer interviewing a candidate for a {role_title} role.\n"
-                f"Based on the following job requirements/tech stack:\n{tech_stack_or_jd}\n\n"
-                f"Generate 3 highly specific, deep-dive technical interview questions testing architectural trade-offs, "
-                f"concurrency, and system design related to: {', '.join(skills)}.\n"
-                f"Return JSON format with key 'questions' containing a list of 3 strings."
-            )
-            response = await client.aio.models.generate_content(
-                model="gemini-1.5-flash",
-                contents=prompt,
-                config={"response_mime_type": "application/json"}
-            )
-            data = json.loads(response.text)
-            data["assessed_skills"] = skills
-            return json.dumps(data, indent=2)
-        except Exception as e:
-            logger.error(f"Error generating LLM interview questions: {e}")
+    try:
+        prompt = (
+            f"You are a Principal Software Engineer interviewing a candidate for a {role_title} role.\n"
+            f"Based on the following job requirements/tech stack:\n{tech_stack_or_jd}\n\n"
+            f"Generate 3 highly specific, deep-dive technical interview questions testing architectural trade-offs, "
+            f"concurrency, and system design related to: {', '.join(skills)}.\n"
+            f"Return JSON format with key 'questions' containing a list of 3 strings."
+        )
+        from app.core.llm_router import generate_content_with_routing
+        res_text = await generate_content_with_routing(
+            prompt=prompt,
+            response_mime_type="application/json",
+            timeout=settings.LLM_QUESTION_TIMEOUT
+        )
+        data = json.loads(res_text)
+        data["assessed_skills"] = skills
+        return json.dumps(data, indent=2)
+    except Exception as e:
+        logger.error(f"Error generating LLM interview questions: {e}")
 
     # Pure dynamic NLP keyphrase synthesis fallback if LLM is unavailable
     dynamic_questions = [
@@ -65,34 +65,34 @@ async def evaluate_star_interview_tool(question: str, user_answer: str) -> str:
     combined with SpaCy NLP POS action-verb mining and metric extraction.
     Zero hardcoded score formulas.
     """
-    linguistic_res = production_nlp_service.extract_linguistic_features(user_answer)
-    keyphrases = production_nlp_service.extract_tfidf_keyphrases(user_answer, top_n=5)
+    linguistic_res = await production_nlp_service.extract_linguistic_features(user_answer)
+    keyphrases = await production_nlp_service.extract_tfidf_keyphrases(user_answer, top_n=5)
     
-    api_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY")
     llm_evaluation = {}
-    
-    if api_key:
-        try:
-            from google import genai
-            client = genai.Client(api_key=api_key)
-            prompt = (
-                f"You are a Staff Technical Interviewer evaluating a candidate's answer.\n"
-                f"Interview Question: {question}\n"
-                f"Candidate Answer: {user_answer}\n\n"
-                f"Evaluate the response for technical accuracy, depth, STAR method coverage (Situation, Task, Action, Result), "
-                f"and quantifiable impact metrics.\n"
-                f"Return JSON with keys: 'technical_score' (0-100), 'strengths', 'weaknesses', 'star_coverage_assessment', 'improvement_suggestions'."
-            )
-            response = await client.aio.models.generate_content(
-                model="gemini-1.5-flash",
-                contents=prompt,
-                config={"response_mime_type": "application/json"}
-            )
-            llm_evaluation = json.loads(response.text)
-        except Exception as e:
-            logger.error(f"Error evaluating interview answer via LLM: {e}")
+    try:
+        prompt = (
+            f"You are a Staff Technical Interviewer evaluating a candidate's answer.\n"
+            f"Interview Question: {question}\n"
+            f"Candidate Answer: {user_answer}\n\n"
+            f"Evaluate the response for technical accuracy, depth, STAR method coverage (Situation, Task, Action, Result), "
+            f"and quantifiable impact metrics.\n"
+            f"Return JSON with keys: 'technical_score' (0-100), 'strengths', 'weaknesses', 'star_coverage_assessment', 'improvement_suggestions'."
+        )
+        from app.core.llm_router import generate_content_with_routing
+        res_text = await generate_content_with_routing(
+            prompt=prompt,
+            response_mime_type="application/json",
+            timeout=settings.LLM_EVALUATION_TIMEOUT
+        )
+        llm_evaluation = json.loads(res_text)
+    except Exception as e:
+        logger.error(f"Error evaluating interview answer via LLM: {e}")
 
     result = {
+        # NLP-005: evaluation_score is None when LLM is unavailable (llm_evaluation is {}).
+        # Previously defaulted to 70.0, which is a fabricated score with no analytical basis.
+        # Consumers must check for null and display "unavailable" rather than treating it as real.
+        "evaluation_score": float(llm_evaluation["technical_score"]) if llm_evaluation.get("technical_score") is not None else None,
         "llm_feedback": llm_evaluation,
         "nlp_action_verbs_detected": linguistic_res["action_verbs"],
         "nlp_technical_noun_chunks": linguistic_res["noun_chunks"],

@@ -28,9 +28,9 @@ async def parse_resume_document_tool(raw_text: str) -> str:
         return json.dumps({"error": str(e)})
 
 @tool(args_schema=SemanticMatchInput)
-def nlp_semantic_similarity_tool(resume_or_profile_text: str, job_description_text: str) -> str:
+async def nlp_semantic_similarity_tool(resume_or_profile_text: str, job_description_text: str) -> str:
     """
     Computes 384-dimensional dense vector embeddings using SentenceTransformers and exact Cosine Distance.
     """
-    result = production_nlp_service.compute_semantic_similarity(resume_or_profile_text, job_description_text)
+    result = await production_nlp_service.compute_semantic_similarity(resume_or_profile_text, job_description_text)
     return json.dumps(result, indent=2)
