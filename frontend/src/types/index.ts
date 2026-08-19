@@ -4,17 +4,26 @@ export interface User {
   id: number
   email: string
   is_active: boolean
+  is_superuser?: boolean
   created_at: string
+  profile?: Profile
 }
 
 export interface Profile {
-  id: number
-  user_id: number
+  id?: number
+  user_id?: number
+  full_name?: string
   bio?: string
   target_role?: string
-  overall_score: number
-  skills_json: Record<string, string[]>
-  updated_at: string
+  overall_score?: number
+  skills_json?: Record<string, any>
+  preferences?: {
+    difficulty?: string
+    model_routing?: string
+    enable_agent_memory?: boolean
+    enable_live_search?: boolean
+  }
+  updated_at?: string
 }
 
 export interface Resume {
@@ -80,12 +89,22 @@ export interface Application {
   created_at: string
 }
 
+export interface ResearchSource {
+  title?: string
+  url: string
+  domain?: string
+  category?: string
+  tier?: string
+  relevance_score?: number
+}
+
 export interface Company {
   company_name: string
   tech_stack: string[]
   interview_process: string
   hiring_trends: string
-  sources: string[]
+  candidate_experience_signals?: string
+  sources: (string | ResearchSource)[]
 }
 
 export interface AgentMessage {

@@ -35,6 +35,11 @@ export const authApi = {
   register: (email: string, password: string) =>
     api.post('/auth/register', { email, password }),
   me: () => api.get('/auth/me'),
+  getProfile: () => api.get('/auth/profile'),
+  updateProfile: (data: { full_name?: string; target_role?: string; bio?: string; preferences?: Record<string, any> }) =>
+    api.put('/auth/profile', data),
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    api.post('/auth/change-password', data),
 }
 
 // ─── Resume ──────────────────────────────────────────────────────────────────
@@ -67,6 +72,7 @@ export const memoryApi = {
   getAll: () => api.get('/memory/'),
   create: (category: string, memory_text: string) =>
     api.post('/memory/', { category, memory_text }),
+  delete: (id: number) => api.delete(`/memory/${id}`),
 }
 
 // ─── Analytics ───────────────────────────────────────────────────────────────

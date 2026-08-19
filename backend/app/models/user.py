@@ -35,10 +35,12 @@ class Profile(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    full_name: Mapped[str] = mapped_column(String, nullable=True)
     bio: Mapped[str] = mapped_column(String, nullable=True)
     target_role: Mapped[str] = mapped_column(String, nullable=True)
     overall_score: Mapped[int] = mapped_column(Integer, default=0)
     skills_json: Mapped[dict] = mapped_column(JSON, default=dict)  # Extracted skills mapping
+    preferences: Mapped[dict] = mapped_column(JSON, default=dict)  # UI, AI, and interview preferences
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
     user: Mapped["User"] = relationship("User", back_populates="profile")

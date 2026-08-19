@@ -14,12 +14,19 @@ from app.api.applications import router as application_router
 from app.api.analytics import router as analytics_router
 from app.api.career import router as career_router
 
+from sqlalchemy import text
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize database tables on startup only for SQLite (development/tests)
     if settings.DATABASE_URL.startswith("sqlite"):
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            for col, col_type in [("full_name", "VARCHAR"), ("preferences", "JSON")]:
+                try:
+                    await conn.execute(text(f"ALTER TABLE profiles ADD COLUMN {col} {col_type}"))
+                except Exception:
+                    pass
     yield
 
 app = FastAPI(

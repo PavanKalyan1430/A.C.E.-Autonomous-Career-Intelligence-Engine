@@ -16,11 +16,33 @@ import {
   Sun
 } from 'lucide-react'
 
+import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import { useAuthStore } from '@/store/authStore'
+
 // Mocking useTheme for now until we build the context
 const useTheme = () => ({ theme: 'light', toggleTheme: () => {} })
 
 export const Sidebar: React.FC = () => {
   const { theme, toggleTheme } = useTheme()
+  const { user, logout } = useAuthStore()
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    queryClient.clear()
+    logout()
+    navigate('/login')
+  }
+
+  const displayName = user?.profile?.full_name || (user?.email ? user.email.split('@')[0] : 'User')
+  const initials = displayName
+    .split(' ')
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || 'US'
 
   const navGroups = [
     {
@@ -124,21 +146,31 @@ export const Sidebar: React.FC = () => {
           Settings
         </NavLink>
         <div className="flex items-center justify-between mt-2 pt-2">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-8 h-8 rounded-full bg-brand-primary border border-[#6B8F71] text-white flex items-center justify-center font-bold text-xs shadow-md">
-              PR
+          <div className="flex items-center gap-3 px-3 py-2 min-w-0 flex-1">
+            <div className="w-8 h-8 rounded-full bg-brand-primary border border-[#6B8F71] text-white flex items-center justify-center font-bold text-xs shadow-md flex-shrink-0">
+              {initials}
             </div>
-            <div className="flex flex-col text-left">
-              <span className="text-sm font-semibold text-white leading-tight">Pavan R.</span>
-              <span className="text-[10px] text-[#AEC3B0]">Pro Member</span>
+            <div className="flex flex-col text-left min-w-0">
+              <span className="text-sm font-semibold text-white leading-tight truncate">{displayName}</span>
+              <span className="text-[10px] text-[#AEC3B0] truncate">{user?.email || 'Pro Member'}</span>
             </div>
           </div>
-          <button 
-            onClick={toggleTheme}
-            className="p-2 text-[#AEC3B0] hover:text-white hover:bg-[#18291E] rounded-md transition-all duration-200"
-          >
-            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={toggleTheme}
+              title="Toggle theme"
+              className="p-2 text-[#AEC3B0] hover:text-white hover:bg-[#18291E] rounded-md transition-all duration-200"
+            >
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <button 
+              onClick={handleLogout}
+              title="Log out"
+              className="p-2 text-[#AEC3B0] hover:text-red-400 hover:bg-[#18291E] rounded-md transition-all duration-200"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
         </div>
       </div>
     </aside>

@@ -31,11 +31,31 @@ class UserUpdate(BaseModel):
                 raise ValueError("Password must be at most 128 characters long.")
         return v
 
+class ProfileBase(BaseModel):
+    full_name: Optional[str] = None
+    target_role: Optional[str] = None
+    bio: Optional[str] = None
+    preferences: Optional[dict] = None
+
+class ProfileUpdate(ProfileBase):
+    pass
+
+class ProfileResponse(ProfileBase):
+    id: int
+    user_id: int
+    overall_score: int = 0
+    skills_json: dict = {}
+    updated_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
+
 class UserResponse(UserBase):
     id: int
     is_active: bool
     is_superuser: bool
     created_at: datetime.datetime
+    profile: Optional[ProfileResponse] = None
 
     class Config:
         from_attributes = True

@@ -269,7 +269,10 @@ function Hero() {
           border: '1px solid rgba(51,102,89,0.55)', background: 'rgba(51,102,89,0.18)',
           marginBottom: '28px',
         }}>
-          <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#6B8F71', animation: 'waveBar 2s ease-in-out infinite', flexShrink: 0 }} />
+          <span style={{
+            display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#6B8F71', flexShrink: 0,
+            animationName: 'waveBar', animationDuration: '2s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite'
+          }} />
           <span style={{ fontSize: '14px', fontWeight: 700, color: '#AEC3B0', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
             Autonomous Career Intelligence
           </span>
@@ -661,8 +664,14 @@ function VoiceInterview() {
                 <div style={{ position: 'relative' }}>
                   {listening && (
                     <>
-                      <div style={{ position: 'absolute', inset: '-12px', borderRadius: '50%', background: '#336659', opacity: 0.2, animation: 'waveBar 2s ease-in-out infinite' }} />
-                      <div style={{ position: 'absolute', inset: '-24px', borderRadius: '50%', background: '#34B36F', opacity: 0.1, animation: 'waveBar 2.5s ease-in-out infinite 0.5s' }} />
+                      <div style={{
+                        position: 'absolute', inset: '-12px', borderRadius: '50%', background: '#336659', opacity: 0.2,
+                        animationName: 'waveBar', animationDuration: '2s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite'
+                      }} />
+                      <div style={{
+                        position: 'absolute', inset: '-24px', borderRadius: '50%', background: '#34B36F', opacity: 0.1,
+                        animationName: 'waveBar', animationDuration: '2.5s', animationTimingFunction: 'ease-in-out', animationIterationCount: 'infinite', animationDelay: '0.5s'
+                      }} />
                     </>
                   )}
                   <div style={{
@@ -681,7 +690,11 @@ function VoiceInterview() {
                       width: '4px', borderRadius: '99px', transformOrigin: 'center',
                       background: listening ? '#34B36F' : '#18291E',
                       height: '6px',
-                      animation: listening ? `waveBar ${0.4 + (i % 5) * 0.1}s ease-in-out infinite alternate` : 'none',
+                      animationName: listening ? 'waveBar' : 'none',
+                      animationDuration: `${0.4 + (i % 5) * 0.1}s`,
+                      animationTimingFunction: 'ease-in-out',
+                      animationIterationCount: 'infinite',
+                      animationDirection: 'alternate',
                       animationDelay: `${i * 0.05}s`,
                       transition: 'background 0.6s ease',
                     }} />

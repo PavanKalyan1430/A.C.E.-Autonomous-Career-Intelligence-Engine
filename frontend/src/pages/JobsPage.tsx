@@ -1,19 +1,19 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { applicationsApi, resumeApi } from '@/api'
+import { applicationsApi, resumeApi, companyApi } from '@/api'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { ResearchSourceCard } from '@/components/ui/ResearchSourceCard'
+import type { ResearchSource } from '@/types'
 import {
   Search,
-  SlidersHorizontal,
   Sparkles,
   ArrowRight,
   TrendingUp,
-  Award,
   AlertTriangle,
   Lightbulb,
   X,
@@ -23,7 +23,9 @@ import {
   Clock,
   Compass,
   CheckCircle,
-  HelpCircle
+  Building2,
+  Globe,
+  Layers
 } from 'lucide-react'
 
 // --- Mock/Adapter Data representing job discovery records ---
@@ -39,7 +41,17 @@ const MOCK_JOBS = [
     missingSkills: ['Kubernetes'],
     description: 'Lead design of Razorpay core payments pipelines using distributed cache logic.',
     whyMatch: 'Excellent experience with high-traffic SQL optimization and FastAPI development.',
-    nextStep: 'Complete a System Design mock practice session before scheduling interviews.'
+    nextStep: 'Complete a System Design mock practice session before scheduling interviews.',
+    sources: [
+      {
+        title: 'Razorpay Engineering Tech Stack & Architecture',
+        url: 'https://razorpay.com/blog/engineering',
+        domain: 'razorpay.com',
+        category: 'Official/Engineering',
+        tier: 'Tier 1: Official Company',
+        relevance_score: 0.92
+      }
+    ]
   },
   {
     id: 102,
@@ -52,7 +64,17 @@ const MOCK_JOBS = [
     missingSkills: ['Kubernetes', 'gRPC'],
     description: 'Scale delivery logistics calculations and topological routing APIs.',
     whyMatch: 'Strong matching for Python POS linguistic structures and parsed back-end verbs.',
-    nextStep: 'Strengthen Kubernetes and topological routing prerequisite graphs.'
+    nextStep: 'Strengthen Kubernetes and topological routing prerequisite graphs.',
+    sources: [
+      {
+        title: 'Swiggy Bytes Engineering Blog',
+        url: 'https-[#]bytes.swiggy.com',
+        domain: 'swiggy.com',
+        category: 'Official/Engineering',
+        tier: 'Tier 1: Official Company',
+        relevance_score: 0.88
+      }
+    ]
   },
   {
     id: 103,
@@ -65,7 +87,17 @@ const MOCK_JOBS = [
     missingSkills: ['AWS', 'Kubernetes'],
     description: 'Work on Jira cloud infrastructure and real-time event streaming systems.',
     whyMatch: 'Demonstrated experience working on cloud scale products and system design.',
-    nextStep: 'Acquire AWS Cloud Practitioner badge to offset cloud prerequisite gap.'
+    nextStep: 'Acquire AWS Cloud Practitioner badge to offset cloud prerequisite gap.',
+    sources: [
+      {
+        title: 'Atlassian Technical Architecture',
+        url: 'https://atlassian.com/engineering',
+        domain: 'atlassian.com',
+        category: 'Official/Engineering',
+        tier: 'Tier 1: Official Company',
+        relevance_score: 0.85
+      }
+    ]
   },
   {
     id: 104,
@@ -78,7 +110,8 @@ const MOCK_JOBS = [
     missingSkills: ['FastAPI', 'Distributed Systems'],
     description: 'Maintain merchant onboarding pipelines and transactional database tables.',
     whyMatch: 'Solid foundation in relational databases and Python programming.',
-    nextStep: 'Build a FastAPI project to showcase microservice architecture patterns.'
+    nextStep: 'Build a FastAPI project to showcase microservice architecture patterns.',
+    sources: []
   }
 ]
 
@@ -169,58 +202,61 @@ export default function JobsPage() {
   // ─── EMPTY STATE (No Resume Uploaded) ──────────────────────────────────
   if (!resume) {
     return (
-      <div className="max-w-md mx-auto text-center py-16 px-4 animate-fade-in">
+      <div className="max-w-xl mx-auto text-center py-16 px-4 animate-fade-in">
         <div className="w-16 h-16 bg-brand-light dark:bg-brand-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-brand-primary/20">
           <Compass size={32} className="text-brand-primary animate-pulse-dot" />
         </div>
-        <h2 className="text-2xl font-bold tracking-tight text-neutral-700 dark:text-white mb-2">
-          Upload resume to unlock discovery
+        <h2 className="text-2xl font-bold tracking-tight text-neutral-800 dark:text-white mb-2">
+          Upload resume to unlock job discovery
         </h2>
-        <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-6 leading-relaxed">
-          Job matching requires technical experience vectors. Upload your resume to map compatibility instantly.
+        <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-6 leading-relaxed max-w-md mx-auto">
+          Job matching requires 384-dimensional technical experience vectors. Upload your resume to map compatibility instantly.
         </p>
         <Button onClick={() => navigate('/resume')} icon={<ArrowRight size={16} />}>
-          Upload Resume
+          Upload Resume to Begin
         </Button>
       </div>
     )
   }
 
   return (
-    <div className="flex gap-6 relative min-h-[calc(100vh-80px)] -m-8 bg-neutral-50 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300">
+    <div className="flex gap-6 relative min-h-[calc(100vh-80px)] text-neutral-700 dark:text-neutral-300 animate-fade-in">
       
       {/* ── MAIN CONTENT LIST PANEL ────────────────────────────────────────── */}
-      <div className="flex-1 p-8 overflow-y-auto space-y-6">
+      <div className="flex-1 space-y-6">
         
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-2">
           <div>
             <h1 className="text-3xl font-bold text-[#3d3d3d] dark:text-white tracking-tight mb-1">Job Intelligence</h1>
-            <p className="text-neutral-600 dark:text-neutral-400 font-medium">Discover opportunities aligned with your career profile.</p>
+            <p className="text-neutral-600 dark:text-neutral-400 font-medium">Discover opportunities aligned with your career profile and technical skills.</p>
           </div>
+          <Button variant="secondary" icon={<Sparkles size={16} />} onClick={() => navigate('/career')}>
+            Ask A.C.E. Agent
+          </Button>
         </div>
 
         {/* Filter controls */}
         <div className="bg-white dark:bg-[#0D1117] border border-neutral-200 dark:border-[#1E293B] rounded-xl p-4 shadow-card space-y-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by company or role..."
-              className="w-full pl-9 pr-4 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-transparent rounded-lg text-xs outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
+              placeholder="Search by company or role title (e.g. Razorpay, Swiggy, Backend)..."
+              className="w-full pl-10 pr-4 py-2.5 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-lg text-xs text-neutral-800 dark:text-white placeholder-neutral-400 outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
             />
           </div>
 
-          <div className="flex gap-3 flex-wrap items-center text-xs font-semibold">
+          <div className="flex gap-3 flex-wrap items-center text-xs font-semibold pt-1">
             {/* Role Filter */}
             <div className="flex items-center gap-1.5">
               <span className="text-neutral-400 dark:text-neutral-500 text-2xs uppercase">Role</span>
               <select 
                 value={selectedRole}
                 onChange={(e) => setSelectedRole(e.target.value)}
-                className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-md px-2 py-1 outline-none text-2xs"
+                className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-md px-2.5 py-1.5 outline-none text-2xs font-semibold text-neutral-700 dark:text-white"
               >
                 <option value="All">All Roles</option>
                 <option value="Senior">Senior Backend</option>
@@ -235,7 +271,7 @@ export default function JobsPage() {
               <select 
                 value={selectedLoc}
                 onChange={(e) => setSelectedLoc(e.target.value)}
-                className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-md px-2 py-1 outline-none text-2xs"
+                className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-md px-2.5 py-1.5 outline-none text-2xs font-semibold text-neutral-700 dark:text-white"
               >
                 <option value="All">All Locations</option>
                 <option value="Remote">Remote</option>
@@ -250,7 +286,7 @@ export default function JobsPage() {
               <select 
                 value={minMatch}
                 onChange={(e) => setMinMatch(Number(e.target.value))}
-                className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-md px-2 py-1 outline-none text-2xs"
+                className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-md px-2.5 py-1.5 outline-none text-2xs font-semibold text-neutral-700 dark:text-white"
               >
                 <option value={0}>All matches</option>
                 <option value={80}>&gt; 80% match</option>
@@ -261,11 +297,11 @@ export default function JobsPage() {
         </div>
 
         {/* Opportunity List Rows */}
-        <div className="space-y-3">
+        <div className="space-y-4">
           {filteredJobs.length === 0 ? (
-            <div className="text-center py-12 text-neutral-400">
-              No matching opportunities found. Try relaxing your filters.
-            </div>
+            <Card className="text-center py-12 text-neutral-400">
+              <p className="text-xs">No matching opportunities found. Try adjusting your filters.</p>
+            </Card>
           ) : (
             filteredJobs.map((job) => {
               const isTracked = applications?.some((app: any) => app.company_name === job.company && app.role_title === job.role)
@@ -273,14 +309,14 @@ export default function JobsPage() {
               return (
                 <div 
                   key={job.id} 
-                  className="bg-white dark:bg-[#0D1117] border border-neutral-200 dark:border-[#1E293B] rounded-xl p-5 hover:border-brand-primary/30 dark:hover:border-brand-primary/30 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-card"
+                  className="bg-white dark:bg-[#0D1117] border border-neutral-200 dark:border-[#1E293B] rounded-xl p-5 hover:border-brand-primary/40 dark:hover:border-brand-primary/40 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-card"
                 >
-                  <div className="space-y-2 flex-1">
+                  <div className="space-y-2.5 flex-1">
                     <div className="flex justify-between items-start md:items-center gap-3">
                       <div>
-                        <h3 className="text-sm font-bold text-[#3d3d3d] dark:text-white leading-tight">{job.role}</h3>
+                        <h3 className="text-base font-bold text-[#3d3d3d] dark:text-white leading-tight">{job.role}</h3>
                         <div className="flex items-center gap-2 text-2xs font-semibold text-neutral-400 dark:text-neutral-500 mt-1">
-                          <span>{job.company}</span>
+                          <span className="text-brand-primary font-bold">{job.company}</span>
                           <span>·</span>
                           <span className="flex items-center gap-1"><MapPin size={12} /> {job.location}</span>
                           <span>·</span>
@@ -289,22 +325,22 @@ export default function JobsPage() {
                       </div>
                       
                       <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        <Badge variant="blue" className="font-bold bg-brand-light border-brand-primary/20 text-brand-primary">
+                        <Badge variant="blue" className="font-bold bg-brand-light border-brand-primary/20 text-brand-primary px-2.5 py-1 text-xs">
                           {job.match}% MATCH
                         </Badge>
                       </div>
                     </div>
 
-                    <p className="text-2xs text-neutral-500 dark:text-neutral-400 line-clamp-1 leading-normal font-medium">
+                    <p className="text-xs text-neutral-600 dark:text-neutral-400 line-clamp-2 leading-relaxed font-medium">
                       {job.description}
                     </p>
 
-                    <div className="flex gap-1.5 flex-wrap">
+                    <div className="flex gap-1.5 flex-wrap pt-1">
                       {job.matchedSkills.map((sk, idx) => (
-                        <Badge key={idx} variant="blue" size="xs">✓ {sk}</Badge>
+                        <Badge key={idx} variant="blue" size="xs" className="font-semibold">✓ {sk}</Badge>
                       ))}
                       {job.missingSkills.map((sk, idx) => (
-                        <Badge key={idx} variant="warning" size="xs">! {sk}</Badge>
+                        <Badge key={idx} variant="warning" size="xs" className="font-semibold">! {sk}</Badge>
                       ))}
                     </div>
                   </div>
@@ -336,21 +372,24 @@ export default function JobsPage() {
 
       {/* ── MATCH ANALYSIS SIDE OVERLAY DRAWER ──────────────────────────────── */}
       {selectedJob && (
-        <aside className="w-80 bg-white dark:bg-[#0D1117] border-l border-neutral-200 dark:border-[#1E293B] p-6 flex flex-col justify-between z-40 transition-all shadow-dropdown flex-shrink-0">
-          <div>
-            <div className="flex justify-between items-center mb-6">
-              <span className="font-bold text-xs dark:text-white flex items-center gap-1.5">
-                <Sparkles size={16} className="text-[#0891B2]" /> Fit Diagnosis
-              </span>
-              <button onClick={() => setActiveJobId(null)} className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded">
+        <aside className="w-80 sm:w-96 bg-white dark:bg-[#0D1117] border-l border-neutral-200 dark:border-[#1E293B] p-6 flex flex-col justify-between z-40 transition-all shadow-dropdown flex-shrink-0">
+          <div className="space-y-6 overflow-y-auto max-h-[calc(100vh-120px)] custom-scrollbar pr-1">
+            <div className="flex justify-between items-center pb-2 border-b border-neutral-100 dark:border-[#1E293B]">
+              <div>
+                <h3 className="font-bold text-sm text-[#3d3d3d] dark:text-white flex items-center gap-1.5">
+                  <Sparkles size={16} className="text-brand-primary" /> Match Diagnosis
+                </h3>
+                <p className="text-2xs text-neutral-400 font-semibold">{selectedJob.company} · {selectedJob.role}</p>
+              </div>
+              <button onClick={() => setActiveJobId(null)} className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg text-neutral-400 hover:text-neutral-700">
                 <X size={16} />
               </button>
             </div>
 
             {/* Match score progress widget */}
-            <div className="mb-6 p-4 bg-brand-light dark:bg-brand-primary/10 border border-brand-primary/20 rounded-xl">
+            <div className="p-4 bg-brand-light dark:bg-brand-primary/10 border border-brand-primary/20 rounded-xl">
               <div className="flex justify-between items-end text-xs font-semibold mb-2">
-                <span>Semantic Match Score</span>
+                <span>Semantic Vector Compatibility</span>
                 <span className="text-brand-primary font-bold">{selectedJob.match}%</span>
               </div>
               <ProgressBar value={selectedJob.match} variant="blue" />
@@ -362,7 +401,7 @@ export default function JobsPage() {
                 <h4 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                   <TrendingUp size={14} className="text-brand-primary" /> Why you match
                 </h4>
-                <p className="text-2xs text-neutral-500 dark:text-neutral-400 leading-relaxed font-medium">
+                <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed font-medium">
                   {selectedJob.whyMatch}
                 </p>
               </div>
@@ -372,9 +411,9 @@ export default function JobsPage() {
                 <h4 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                   <AlertTriangle size={14} className="text-amber-500" /> Skill Gaps
                 </h4>
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-1.5">
                   {selectedJob.missingSkills.map((sk, i) => (
-                    <Badge key={i} variant="warning" size="xs">{sk}</Badge>
+                    <Badge key={i} variant="warning" size="xs" className="font-semibold">{sk}</Badge>
                   ))}
                 </div>
               </div>
@@ -384,14 +423,28 @@ export default function JobsPage() {
                 <h4 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                   <Lightbulb size={14} className="text-[#0891B2]" /> Recommended Action
                 </h4>
-                <p className="text-2xs text-neutral-500 dark:text-neutral-400 leading-relaxed font-medium">
+                <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed font-medium">
                   {selectedJob.nextStep}
                 </p>
               </div>
+
+              {/* Company Web Research Sources */}
+              {selectedJob.sources && selectedJob.sources.length > 0 && (
+                <div className="pt-2">
+                  <h4 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <Globe size={14} className="text-brand-primary" /> Research Sources
+                  </h4>
+                  <div className="space-y-2">
+                    {selectedJob.sources.map((src, i) => (
+                      <ResearchSourceCard key={i} source={src} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="space-y-2 mt-6">
+          <div className="space-y-2 mt-6 pt-4 border-t border-neutral-100 dark:border-[#1E293B]">
             <Button 
               fullWidth 
               variant="secondary"
@@ -402,10 +455,10 @@ export default function JobsPage() {
             </Button>
             <Button 
               fullWidth 
-              variant="ghost"
-              onClick={() => navigate('/career')}
+              variant="primary"
+              onClick={() => navigate('/interviews')}
             >
-              Ask ACE
+              Prepare Interview
             </Button>
           </div>
         </aside>

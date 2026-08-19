@@ -131,7 +131,7 @@ export default function DashboardPage() {
   }
 
   // Derived user details or defaults
-  const userName = user?.email ? user.email.split('@')[0] : 'Pavan'
+  const userName = user?.profile?.full_name || (user?.email ? user.email.split('@')[0] : 'Candidate')
   const displayGreeting = `Greetings ${userName.charAt(0).toUpperCase() + userName.slice(1)}`
 
   // Calculate live values based on backend API schema responses
