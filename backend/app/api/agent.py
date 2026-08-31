@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -16,6 +17,7 @@ from app.agents.orchestrator import agent_executor
 from app.services.nlp_service import production_nlp_service
 from app.services.memory_service import memory_service
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agent", tags=["agent"])
 
 class QueryRequest(BaseModel):
@@ -26,6 +28,7 @@ class QueryResponse(BaseModel):
     session_id: int
     response: str
     current_agent: str
+    meta_data: Optional[Dict[str, Any]] = None
 
 @router.post("/query", response_model=QueryResponse)
 async def query_agent(
@@ -70,6 +73,37 @@ async def query_agent(
         mem_lines = [f"- [{m['category']}] {m['memory_text']}" for m in relevant_memories]
         memory_context_str = "\n[User Personal Memory Context]:\n" + "\n".join(mem_lines)
 
+    # Retrieve user's Career Intelligence context using the lightweight profile only.
+    # We intentionally use `get_canonical_candidate_profile` (DB-only, no LLM calls) rather
+    # than `generate_career_intelligence` (which runs a full ATS + LLM synthesis) so that:
+    #   1. We don't consume LLM quota / mocks set up for the agent itself.
+    #   2. We avoid triggering SQLAlchemy async greenlet issues in test contexts.
+    # The agent's own tools (compute_topological_skill_gap_tool, retrieve_user_memory_tool)
+    # handle deeper analysis on demand during reasoning.
+    career_context_str = ""
+    try:
+        from app.services.career_intelligence import career_intelligence_service
+        candidate_profile = await career_intelligence_service.get_canonical_candidate_profile(
+            current_user.id, db
+        )
+        if candidate_profile and candidate_profile.get("target_role"):
+            verified_skills = candidate_profile.get("verified_skills", [])
+            weak_areas = candidate_profile.get("weak_areas", [])
+            avg_score = candidate_profile.get("average_interview_score", 0.0)
+            interview_count = candidate_profile.get("interview_history_count", 0)
+
+            career_context_str = (
+                f"\n[Candidate Career Profile]:\n"
+                f"- Target Role: {candidate_profile.get('target_role')}\n"
+                f"- Target Company: {candidate_profile.get('target_company') or 'None Specified'}\n"
+                f"- Verified Skills: {', '.join(verified_skills)}\n"
+                f"- Weak Areas (from mock interviews): {', '.join(weak_areas)}\n"
+                f"- Mock Interview Sessions: {interview_count} completed, "
+                f"avg score {avg_score}/100\n"
+            )
+    except Exception as e:
+        logger.warning(f"Could not load career profile context for agent: {e}")
+
     # 4. Fetch past messages in session for multi-turn history context
     history_result = await db.execute(
         select(ChatMessage)
@@ -78,10 +112,16 @@ async def query_agent(
     )
     past_messages = history_result.scalars().all()
     message_history = []
-    
-    # Inject memory context if available
+
+    # Inject memory & career context if available (combined into a single system-context message)
+    context_parts = []
     if memory_context_str:
-        message_history.append({"role": "user", "content": memory_context_str})
+        context_parts.append(memory_context_str)
+    if career_context_str:
+        context_parts.append(career_context_str)
+
+    if context_parts:
+        message_history.append({"role": "user", "content": "\n\n".join(context_parts)})
 
     for msg in past_messages:
         role = "user" if msg.role == "user" else "assistant"
@@ -90,6 +130,7 @@ async def query_agent(
     # 5. Execute Dynamic ReAct Agent or Production NLP Engine
     response_content = ""
     current_agent = "autonomous_react_agent"
+    error_metadata = {}
 
     if agent_executor:
         try:
@@ -110,72 +151,83 @@ async def query_agent(
                     tracker = tool_calls_counter.get()
                     count = tracker.get("count", 0) if tracker else 0
                     if count >= settings.AGENT_MAX_TOOL_CALLS:
-                        response_content = json.dumps({
+                        response_content = "I couldn't complete that analysis because the agent exceeded its allocated tool call budget. Your resume and profile are safe. You can retry the analysis."
+                        error_metadata = {
                             "status": "execution_limit_exceeded",
                             "error": "Agent tool call limit exceeded"
-                        })
+                        }
                     else:
-                        response_content = json.dumps({
+                        response_content = "I couldn't complete that analysis because the agent execution iteration limit was exceeded. Your resume and profile are safe. You can retry the analysis."
+                        error_metadata = {
                             "status": "execution_limit_exceeded",
                             "error": "Agent iteration limit exceeded"
-                        })
+                        }
             else:
                 response_content = "No response generated by agent."
         except asyncio.TimeoutError:
-            response_content = json.dumps({
+            response_content = "I couldn't complete that analysis because the career intelligence service timed out. Your resume and profile are safe. You can retry the analysis."
+            error_metadata = {
                 "status": "execution_limit_exceeded",
                 "error": "Agent execution timeout exceeded"
-            })
+            }
         except ValueError as e:
             if "Agent tool call limit exceeded" in str(e):
-                response_content = json.dumps({
+                response_content = "I couldn't complete that analysis because the agent exceeded its allocated tool call budget. Your resume and profile are safe. You can retry the analysis."
+                error_metadata = {
                     "status": "execution_limit_exceeded",
                     "error": "Agent tool call limit exceeded"
-                })
+                }
             else:
-                response_content = json.dumps({
+                response_content = "I couldn't complete that analysis because of an validation failure. Your resume and profile are safe."
+                error_metadata = {
                     "status": "execution_limit_exceeded",
                     "error": f"Agent validation failure: {str(e)}"
-                })
+                }
         except Exception as e:
             err_name = type(e).__name__
             if "Agent tool call limit exceeded" in str(e):
-                response_content = json.dumps({
+                response_content = "I couldn't complete that analysis because the agent exceeded its allocated tool call budget. Your resume and profile are safe. You can retry the analysis."
+                error_metadata = {
                     "status": "execution_limit_exceeded",
                     "error": "Agent tool call limit exceeded"
-                })
+                }
             elif err_name == "GraphRecursionError" or "recursion limit" in str(e).lower() or "recursion" in err_name.lower():
-                response_content = json.dumps({
+                response_content = "I couldn't complete that analysis because the agent execution iteration limit was exceeded. Your resume and profile are safe. You can retry the analysis."
+                error_metadata = {
                     "status": "execution_limit_exceeded",
                     "error": "Agent iteration limit exceeded"
-                })
+                }
             else:
                 err_msg = str(e)
                 if "rate" in err_msg.lower() or "429" in err_msg or "quota" in err_msg.lower() or "resourceexhausted" in err_msg.lower():
-                    response_content = json.dumps({
+                    response_content = "AI provider rate limit reached. Please try again in a few moments."
+                    error_metadata = {
                         "status": "error",
                         "code": "provider_rate_limited",
-                        "error": "AI provider rate limit reached. Please try again in a few moments."
-                    })
+                        "error": err_msg
+                    }
                 else:
-                    response_content = json.dumps({
+                    response_content = "The career intelligence reasoning service is temporarily unavailable. Please retry."
+                    error_metadata = {
                         "status": "error",
                         "code": "llm_unavailable",
-                        "error": f"LLM reasoning service unavailable: {err_msg}"
-                    })
+                        "error": err_msg
+                    }
     else:
-        response_content = json.dumps({
+        response_content = "AI agent service is not initialized."
+        error_metadata = {
             "status": "error",
             "code": "llm_unavailable",
             "error": "AI agent service is not initialized."
-        })
+        }
 
     # 6. Save assistant response to database
     assistant_msg = ChatMessage(
         session_id=session.id,
         role="assistant",
         content=response_content,
-        agent_name=current_agent
+        agent_name=current_agent,
+        meta_data=error_metadata
     )
     db.add(assistant_msg)
     await db.commit()
@@ -183,7 +235,8 @@ async def query_agent(
     return QueryResponse(
         session_id=session.id,
         response=response_content,
-        current_agent=current_agent
+        current_agent=current_agent,
+        meta_data=error_metadata if error_metadata else None
     )
 
 @router.get("/sessions", response_model=List[ChatSessionHeaderResponse])

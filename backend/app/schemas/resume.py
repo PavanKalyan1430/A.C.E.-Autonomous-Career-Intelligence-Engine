@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 class PersonalInfo(BaseModel):
@@ -37,3 +37,68 @@ class ResumeSchema(BaseModel):
     skills: List[str] = Field(default_factory=list, description="List of technical and soft skills extracted")
     languages: List[str] = Field(default_factory=list, description="Languages spoken")
     summary: Optional[str] = Field(None, description="Professional summary or bio")
+
+class ATSCategoryScore(BaseModel):
+    category_key: str = Field(..., description="Unique category key identifier")
+    category_name: str = Field(..., description="Human-readable category name")
+    score: Optional[int] = Field(None, description="Category score scaled 0-100")
+    weight_percentage: int = Field(..., description="Weight percentage in overall ATS score calculation")
+    why_basis: str = Field(..., description="Rationale for score")
+    evidence: str = Field(..., description="Evidence extracted from candidate resume")
+    deficiencies: List[str] = Field(default_factory=list, description="Specific deficiencies identified")
+    provenance_details: Optional[Dict[str, Any]] = Field(None, description="Inputs and variables used to compute this score")
+    category_score: Optional[int] = Field(None, description="Category score scaled 0-100")
+    weight: Optional[float] = Field(None, description="Category weight (0.0 - 1.0)")
+    weighted_contribution: Optional[float] = Field(None, description="Weighted contribution to overall score")
+    calculation_inputs: Optional[Dict[str, Any]] = Field(None, description="Inputs checked for score")
+
+class KeywordIntelligenceItem(BaseModel):
+    keyword: str = Field(..., description="Keyword name")
+    category: str = Field(..., description="matched, missing, or weak")
+    priority: str = Field(..., description="high, medium, or low")
+    where_it_matters: str = Field(..., description="Context on why this keyword matters for the role")
+    source_type: Optional[str] = Field("role_inference", description="Source of requirement: supplied_jd, company_research, or role_inference")
+
+class ActionableImprovementItem(BaseModel):
+    problem: str = Field(..., description="Clear problem statement")
+    evidence: str = Field(..., description="Evidence extracted from candidate resume")
+    why_it_matters: str = Field(..., description="Recruiter/ATS impact rationale")
+    recommendation: str = Field(..., description="Concrete improvement action")
+    impact: str = Field(..., description="high, medium, or low priority impact")
+
+class RoadmapPhaseItem(BaseModel):
+    title: str = Field(..., description="Goal title")
+    action_item: str = Field(..., description="Actionable step")
+    why_recommended: str = Field(..., description="Rationale based on resume gap analysis")
+    priority: str = Field(..., description="high, medium, or low")
+
+class CareerRoadmapPlan(BaseModel):
+    immediate_1_2_weeks: List[RoadmapPhaseItem] = Field(default_factory=list)
+    short_term_1_2_months: List[RoadmapPhaseItem] = Field(default_factory=list)
+    long_term_3_6_months: List[RoadmapPhaseItem] = Field(default_factory=list)
+
+class ATSAnalysisResponse(BaseModel):
+    target_role: str
+    overall_ats_score: Optional[int] = None
+    score_level: str
+    executive_summary: str
+    key_strengths: List[str]
+    categories: List[ATSCategoryScore]
+    matched_keywords: List[str]
+    missing_keywords: List[KeywordIntelligenceItem]
+    weak_keywords: List[str]
+    actionable_improvements: List[ActionableImprovementItem]
+    career_roadmap: CareerRoadmapPlan
+    status: Optional[str] = Field("success", description="Analysis status: success or analysis_unavailable")
+    penalties: Optional[List[Dict[str, Any]]] = Field(default_factory=list, description="List of penalties applied")
+    total_penalty: Optional[int] = Field(0, description="Sum of all penalties applied")
+
+
+class JDCompareRequest(BaseModel):
+    jd_text: str = Field(..., min_length=20, description="Job description text for comparison")
+
+
+class TriggerATSAnalysisRequest(BaseModel):
+    target_role: str = Field(..., min_length=1, description="Target role to analyze the resume against")
+
+

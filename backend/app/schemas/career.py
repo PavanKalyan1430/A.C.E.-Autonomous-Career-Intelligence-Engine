@@ -30,7 +30,7 @@ class LearningRoadmapNode(BaseModel):
     name: str
     status: str  # "completed", "focus", "recommended", "blocked"
     impact: str  # "high", "medium"
-    prerequisites: List[str]
+    prerequisites: List[Any]
     reason: str
     estimated_effort_hours: int
 

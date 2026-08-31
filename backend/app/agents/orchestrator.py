@@ -71,9 +71,11 @@ SYSTEM_PROMPT = (
 
 def build_agent():
     import os
-    groq_key = settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY")
+    from app.core.groq_key_rotator import groq_key_rotator
+    # Consider Groq available if at least one key is configured via the rotator
+    groq_available = groq_key_rotator.key_count() > 0
     gemini_key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY")
-    if groq_key or gemini_key:
+    if groq_available or gemini_key:
         from app.core.llm_router import RoutedChatModel
         llm = RoutedChatModel(temperature=0.2)
         try:

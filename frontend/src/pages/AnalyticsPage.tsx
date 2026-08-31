@@ -44,25 +44,37 @@ export default function AnalyticsPage() {
   const appliedCount = applications?.length || 0
   const responsesCount = applications?.filter((app: any) => app.status === 'interviewing' || app.status === 'offer').length || 0
   const interviewsCount = applications?.filter((app: any) => app.status === 'interviewing').length || 0
-  const avgMatch = appliedCount > 0 
-    ? Math.round(applications.reduce((acc: number, app: any) => acc + (app.analysis?.match_percentage || 80), 0) / appliedCount)
-    : 82
+  const analyzedApps = (applications || []).filter((app: any) => app.analysis?.match_percentage !== undefined && app.analysis?.match_percentage !== null)
+  const avgMatch = analyzedApps.length > 0 
+    ? Math.round(analyzedApps.reduce((acc: number, app: any) => acc + app.analysis.match_percentage, 0) / analyzedApps.length)
+    : (analytics?.overview?.job_match_percentage || 0)
 
   const funnel = analytics?.funnel || { applied: 0, interviewing: 0, offer: 0, rejected: 0 }
   
-  // Custom SVG Trend Line points representing Mock Interview Score progression (72, 75, 78, 82)
-  const scoreTrendPoints = [72, 75, 74, 78, 81, 82]
+  // Real backend score trend points
+  const rawScoreTrend = analytics?.interview_analytics?.score_trend || []
+  const scoreTrendPoints = rawScoreTrend.map((pt: any) => pt.score)
+
   const svgWidth = 500
   const svgHeight = 150
   
-  // Calculate SVG Path for trend line
-  const pointsPath = scoreTrendPoints.map((score, idx) => {
-    const x = (idx / (scoreTrendPoints.length - 1)) * svgWidth
-    const y = svgHeight - ((score - 60) / (90 - 60)) * svgHeight // Map score range 60-90 to height
-    return `${x},${y}`
-  }).join(' ')
+  // Calculate SVG Path for trend line if at least 2 data points exist
+  const hasEnoughTrendData = scoreTrendPoints.length >= 2
+  const minScore = hasEnoughTrendData ? Math.min(...scoreTrendPoints, 50) : 50
+  const maxScore = hasEnoughTrendData ? Math.max(...scoreTrendPoints, 100) : 100
 
-  const pathD = `M ${pointsPath}`
+  const pointsPath = hasEnoughTrendData
+    ? scoreTrendPoints.map((score: number, idx: number) => {
+        const x = (idx / (scoreTrendPoints.length - 1)) * svgWidth
+        const y = svgHeight - ((score - minScore) / Math.max(maxScore - minScore, 1)) * svgHeight
+        return `${x},${y}`
+      }).join(' ')
+    : ''
+
+  const pathD = pointsPath ? `M ${pointsPath}` : ''
+
+  // Insights list from backend
+  const insightsList = analytics?.insights || []
 
   // Loading indicator skeleton
   if (isLoading) {
@@ -162,7 +174,7 @@ export default function AnalyticsPage() {
               <span>Applied</span>
               <span className="text-neutral-400">{appliedCount}</span>
             </div>
-            <ProgressBar value={100} variant="blue" />
+            <ProgressBar value={appliedCount > 0 ? 100 : 0} variant="blue" />
           </div>
 
           {/* Screening */}
@@ -204,54 +216,59 @@ export default function AnalyticsPage() {
               <TrendingUp size={14} className="text-brand-primary" /> Interview Score Trend
             </h3>
 
-            {/* Custom Responsive SVG Chart Line */}
-            <div className="w-full h-40 relative border-b border-neutral-100 dark:border-neutral-800">
-              <svg className="w-full h-full" viewBox={`0 0 ${svgWidth} ${svgHeight}`} preserveAspectRatio="none">
-                {/* Gradient area under path */}
-                <defs>
-                  <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#2563EB" stopOpacity="0.2" />
-                    <stop offset="100%" stopColor="#2563EB" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-                <path 
-                  d={`${pathD} L ${svgWidth},${svgHeight} L 0,${svgHeight} Z`}
-                  fill="url(#chartGradient)"
-                />
-                
-                {/* Actual Line Path */}
-                <path 
-                  d={pathD}
-                  fill="none"
-                  stroke="#2563EB"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-
-                {/* Score dots */}
-                {scoreTrendPoints.map((score, idx) => {
-                  const x = (idx / (scoreTrendPoints.length - 1)) * svgWidth
-                  const y = svgHeight - ((score - 60) / (90 - 60)) * svgHeight
-                  return (
-                    <circle 
-                      key={idx}
-                      cx={x}
-                      cy={y}
-                      r="5"
-                      fill="#2563EB"
-                      stroke="#FFFFFF"
-                      strokeWidth="2"
+            {hasEnoughTrendData ? (
+              <>
+                <div className="w-full h-40 relative border-b border-neutral-100 dark:border-neutral-800">
+                  <svg className="w-full h-full" viewBox={`0 0 ${svgWidth} ${svgHeight}`} preserveAspectRatio="none">
+                    <defs>
+                      <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#336659" stopOpacity="0.3" />
+                        <stop offset="100%" stopColor="#336659" stopOpacity="0.0" />
+                      </linearGradient>
+                    </defs>
+                    <path 
+                      d={`${pathD} L ${svgWidth},${svgHeight} L 0,${svgHeight} Z`}
+                      fill="url(#chartGradient)"
                     />
-                  )
-                })}
-              </svg>
-            </div>
-            
-            <div className="flex justify-between text-[10px] text-neutral-400 dark:text-neutral-500 uppercase font-semibold mt-2.5">
-              <span>Session 1</span>
-              <span>Session 3</span>
-              <span>Latest Session</span>
-            </div>
+                    <path 
+                      d={pathD}
+                      fill="none"
+                      stroke="#336659"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                    {scoreTrendPoints.map((score: number, idx: number) => {
+                      const x = (idx / (scoreTrendPoints.length - 1)) * svgWidth
+                      const y = svgHeight - ((score - minScore) / Math.max(maxScore - minScore, 1)) * svgHeight
+                      return (
+                        <circle 
+                          key={idx}
+                          cx={x}
+                          cy={y}
+                          r="5"
+                          fill="#336659"
+                          stroke="#FFFFFF"
+                          strokeWidth="2"
+                        />
+                      )
+                    })}
+                  </svg>
+                </div>
+                
+                <div className="flex justify-between text-[10px] text-neutral-400 dark:text-neutral-500 uppercase font-semibold mt-2.5">
+                  <span>First Session</span>
+                  <span>Latest Session</span>
+                </div>
+              </>
+            ) : (
+              <div className="h-40 flex flex-col items-center justify-center text-center p-4 border border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl">
+                <TrendingUp size={28} className="text-neutral-300 dark:text-neutral-700 mb-2" />
+                <p className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">Not enough data yet</p>
+                <p className="text-[11px] text-neutral-400 max-w-xs mt-0.5">
+                  Complete mock interview practice sessions to generate score progression trends over time.
+                </p>
+              </div>
+            )}
           </div>
         </Card>
 
@@ -259,24 +276,32 @@ export default function AnalyticsPage() {
         <Card className="flex flex-col justify-between">
           <div>
             <h3 className="text-2xs font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest mb-6 flex items-center gap-1.5">
-              <BarChart3 size={14} className="text-brand-primary" /> Application Activity
+              <BarChart3 size={14} className="text-brand-primary" /> Application Pipeline Volume
             </h3>
 
-            {/* Custom activity flex block representing daily volume */}
-            <div className="flex items-end justify-between h-40 gap-2 border-b border-neutral-100 dark:border-neutral-800 pb-2">
-              <div className="bg-brand-primary/20 dark:bg-brand-primary/10 w-full h-8 rounded-sm" title="2 applications" />
-              <div className="bg-brand-primary/20 dark:bg-brand-primary/10 w-full h-12 rounded-sm" title="3 applications" />
-              <div className="bg-brand-primary/40 w-full h-20 rounded-sm" title="5 applications" />
-              <div className="bg-brand-primary/60 w-full h-28 rounded-sm" title="7 applications" />
-              <div className="bg-brand-primary w-full h-36 rounded-sm" title="9 applications" />
-              <div className="bg-brand-primary/50 w-full h-24 rounded-sm" title="6 applications" />
-            </div>
+            {appliedCount > 0 ? (
+              <>
+                <div className="flex items-end justify-between h-40 gap-2 border-b border-neutral-100 dark:border-neutral-800 pb-2">
+                  <div className="bg-brand-primary/20 w-full h-8 rounded-sm" title="Applied" />
+                  <div className="bg-brand-primary/50 w-full h-16 rounded-sm" title="Screening" />
+                  <div className="bg-brand-primary w-full h-28 rounded-sm" title="Interviewing" />
+                  <div className="bg-success w-full h-36 rounded-sm" title="Offers" />
+                </div>
 
-            <div className="flex justify-between text-[10px] text-neutral-400 dark:text-neutral-500 uppercase font-semibold mt-2.5">
-              <span>Week 1</span>
-              <span>Week 3</span>
-              <span>Active Week</span>
-            </div>
+                <div className="flex justify-between text-[10px] text-neutral-400 dark:text-neutral-500 uppercase font-semibold mt-2.5">
+                  <span>Applied ({appliedCount})</span>
+                  <span>Interviewing ({interviewsCount})</span>
+                </div>
+              </>
+            ) : (
+              <div className="h-40 flex flex-col items-center justify-center text-center p-4 border border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl">
+                <Briefcase size={28} className="text-neutral-300 dark:text-neutral-700 mb-2" />
+                <p className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">No applications tracked yet</p>
+                <p className="text-[11px] text-neutral-400 max-w-xs mt-0.5">
+                  Add target job applications to analyze conversion funnel volume and progress.
+                </p>
+              </div>
+            )}
           </div>
         </Card>
 
@@ -285,11 +310,21 @@ export default function AnalyticsPage() {
       {/* Career Insight Panel */}
       <Card className="border-t-4 border-t-brand-primary bg-gradient-to-r from-white to-brand-sage/5 dark:from-[#0D1117] dark:to-[#18291E]/10">
         <h3 className="text-2xs font-bold text-brand-primary uppercase tracking-widest mb-3 flex items-center gap-1.5">
-          <Sparkles size={14} className="text-brand-primary animate-pulse-dot" /> Career Insight
+          <Sparkles size={14} className="text-brand-primary animate-pulse-dot" /> Career Insights & Recommendations
         </h3>
-        <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed font-medium">
-          Your mock interview performance has improved consistently over the last 30 days. Your response score has climbed from 72 to 82. System Design remains your highest-impact area; practice topological container routing before your upcoming Swiggy interview round.
-        </p>
+        {insightsList.length > 0 ? (
+          <div className="space-y-2">
+            {insightsList.map((ins: any, i: number) => (
+              <p key={i} className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed font-medium">
+                • {ins.text}
+              </p>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed font-medium">
+            Upload your resume or complete your first mock interview to generate personalized career AI diagnostics.
+          </p>
+        )}
       </Card>
 
     </div>

@@ -19,12 +19,10 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
-
-// Mocking useTheme for now until we build the context
-const useTheme = () => ({ theme: 'light', toggleTheme: () => {} })
+import { useThemeStore } from '@/store/themeStore'
 
 export const Sidebar: React.FC = () => {
-  const { theme, toggleTheme } = useTheme()
+  const { theme, toggleTheme } = useThemeStore()
   const { user, logout } = useAuthStore()
   const queryClient = useQueryClient()
   const navigate = useNavigate()

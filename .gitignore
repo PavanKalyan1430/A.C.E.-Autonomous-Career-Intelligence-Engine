@@ -27,27 +27,31 @@ frontend/node_modules/
 dist/
 frontend/dist/
 dist-ssr/
+.vite/
+frontend/.vite/
 *.local
 
-# Logs
+# Logs & Temporary Files
 *.log
 logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+*.tmp
+*.temp
 
-# Databases & Cache
+# Databases & Local Data
 *.db
 *.sqlite
 *.sqlite3
 
-# Environment keys
+# Environment & Secrets
 .env
 .env.*
 !.env.example
 
-# OS & Editor files
+# OS & Editor Files
 .DS_Store
 Thumbs.db
 .idea/
@@ -58,3 +62,9 @@ Thumbs.db
 *.ntvs*
 *.njsproj
 *.sln
+
+# Generated Media & Test Audio Artifacts
+*.mp3
+*.wav
+*.ogg
+*.flac

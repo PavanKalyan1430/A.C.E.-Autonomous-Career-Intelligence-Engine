@@ -29,7 +29,7 @@ export const Button: React.FC<ButtonProps> = ({
   ].join(' ')
 
   const variants = {
-    primary:   'bg-brand-blue text-white hover:bg-brand-blue-hover shadow-sm active:scale-[0.98]',
+    primary:   'bg-brand-primary text-white hover:bg-brand-hover shadow-sm active:scale-[0.98]',
     secondary: 'bg-white dark:bg-[#0D1117] text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-[#1E293B] hover:border-neutral-300 hover:bg-neutral-50 dark:hover:bg-[#111827]',
     ghost:     'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-[#1E293B]',
     danger:    'bg-danger text-white hover:bg-red-700 shadow-sm',

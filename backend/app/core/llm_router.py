@@ -7,6 +7,7 @@ from typing import Any, List, Optional, Dict
 from groq import AsyncGroq
 from app.core.config import settings
 from app.core.genai import get_genai_client
+from app.core.groq_key_rotator import groq_key_rotator
 
 # LangChain imports for the custom routed chat model
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -56,8 +57,8 @@ async def generate_content_with_routing(
     if timeout is None:
         timeout = settings.LLM_EVALUATION_TIMEOUT
 
-    # 1. Try Groq Primary
-    groq_api_key = settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY")
+    # 1. Try Groq Primary (key rotated across all configured keys)
+    groq_api_key = await groq_key_rotator.async_next_key()
     if groq_api_key:
         try:
             logger.info("Attempting primary LLM generation via Groq (openai/gpt-oss-120b)")
@@ -72,10 +73,10 @@ async def generate_content_with_routing(
                     extra_args["response_format"] = {"type": "json_object"}
 
                 # Call Groq with timeout and retry
-                async def _call_groq():
+                async def _call_groq(model_name="openai/gpt-oss-120b"):
                     return await asyncio.wait_for(
                         groq_client.chat.completions.create(
-                            model="openai/gpt-oss-120b",
+                            model=model_name,
                             messages=messages,
                             temperature=0.2,
                             **extra_args
@@ -83,9 +84,21 @@ async def generate_content_with_routing(
                         timeout=timeout
                     )
                 
-                response = await _execute_with_retry(_call_groq)
+                try:
+                    response = await _execute_with_retry(lambda: _call_groq("openai/gpt-oss-120b"))
+                    model_used = "openai/gpt-oss-120b"
+                except Exception as ex1:
+                    logger.warning(f"Groq 120b model failed: {ex1}. Trying Groq 20b fallback...")
+                    try:
+                        response = await _execute_with_retry(lambda: _call_groq("openai/gpt-oss-20b"))
+                        model_used = "openai/gpt-oss-20b"
+                    except Exception as ex2:
+                        logger.warning(f"Groq 20b model failed: {ex2}. Trying Groq compound-mini fallback...")
+                        response = await _execute_with_retry(lambda: _call_groq("groq/compound-mini"))
+                        model_used = "groq/compound-mini"
+
                 set_active_provider("Groq")
-                logger.info("Successfully generated content via Groq.")
+                logger.info(f"Successfully generated content via Groq ({model_used}).")
                 return response.choices[0].message.content
         except Exception as e:
             logger.warning(f"Groq primary generation failed: {e}. Falling back to Gemini.")
@@ -259,8 +272,8 @@ class RoutedChatModel(BaseChatModel):
         if tool_messages_count >= settings.AGENT_MAX_TOOL_CALLS:
             raise ValueError("Agent tool call limit exceeded")
 
-        # 1. Try Groq Primary
-        groq_api_key = settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY")
+        # 1. Try Groq Primary (key rotated across all configured keys)
+        groq_api_key = await groq_key_rotator.async_next_key()
         if groq_api_key:
             try:
                 async with AsyncGroq(api_key=groq_api_key) as groq_client:
@@ -271,17 +284,29 @@ class RoutedChatModel(BaseChatModel):
                     if groq_tools:
                         extra_args["tools"] = groq_tools
 
-                    async def _call_groq():
+                    async def _call_groq(model_name="openai/gpt-oss-120b"):
                         return await asyncio.wait_for(
                             groq_client.chat.completions.create(
-                                model="openai/gpt-oss-120b",
+                                model=model_name,
                                 messages=groq_msgs,
                                 temperature=self.temperature,
                                 **extra_args
                             ),
                             timeout=settings.LLM_QUESTION_TIMEOUT
                         )
-                    response = await _execute_with_retry(_call_groq)
+                    try:
+                        response = await _execute_with_retry(lambda: _call_groq("openai/gpt-oss-120b"))
+                        model_used = "openai/gpt-oss-120b"
+                    except Exception as ex1:
+                        logger.warning(f"Groq 120b model failed: {ex1}. Trying Groq 20b fallback...")
+                        try:
+                            response = await _execute_with_retry(lambda: _call_groq("openai/gpt-oss-20b"))
+                            model_used = "openai/gpt-oss-20b"
+                        except Exception as ex2:
+                            logger.warning(f"Groq 20b model failed: {ex2}. Trying Groq compound-mini fallback...")
+                            response = await _execute_with_retry(lambda: _call_groq("groq/compound-mini"))
+                            model_used = "groq/compound-mini"
+
                     set_active_provider("Groq")
                     
                     # Parse tool calls if returned by Groq

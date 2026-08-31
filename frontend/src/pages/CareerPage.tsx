@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { agentApi, memoryApi, resumeApi } from '@/api'
+import { agentApi, memoryApi, resumeApi, analyticsApi, careerApi } from '@/api'
+import { useAuthStore } from '@/store/authStore'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -29,19 +30,9 @@ import {
 } from 'lucide-react'
 
 // Render specialized capability card if message content matches certain patterns
-function parseMessageContent(content: string) {
-  // Simple check for specialized modules
-  const isResumeAnalysis = content.toLowerCase().includes('resume analysis') || content.toLowerCase().includes('semantic match')
-  const isSkillGap = content.toLowerCase().includes('skill gap') || content.toLowerCase().includes('missing skills')
-  
-  return {
-    isResumeAnalysis,
-    isSkillGap,
-    cleanText: content
-  }
-}
 
 export default function CareerPage() {
+  const { user } = useAuthStore()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
@@ -85,6 +76,26 @@ export default function CareerPage() {
     queryKey: ['latestResume'],
     queryFn: async () => {
       const res = await resumeApi.getLatest()
+      return res.data
+    },
+    retry: false
+  })
+
+  // Fetch dashboard analytics for dynamic career score in context panel
+  const { data: dashboardData } = useQuery({
+    queryKey: ['analyticsDashboard'],
+    queryFn: async () => {
+      const res = await analyticsApi.getDashboard()
+      return res.data
+    },
+    retry: false
+  })
+
+  // Fetch career intelligence for target role & alignment context
+  const { data: careerIntel } = useQuery({
+    queryKey: ['careerIntelligence'],
+    queryFn: async () => {
+      const res = await careerApi.getIntelligence()
       return res.data
     },
     retry: false
@@ -146,26 +157,46 @@ export default function CareerPage() {
   }
 
   const toggleRecording = () => {
-    setIsRecording(!isRecording)
-    // Simulate speaking transcription input trigger
-    if (!isRecording) {
-      setTimeout(() => {
-        setInputText("What key skills am I missing for a backend engineer role?")
-        setIsRecording(false)
-      }, 2500)
+    // Disabled: Voice input is not supported for Career Agent. Go to Mock Interview for real-time speech evaluation.
+  }
+
+  const hasResume = !!resume
+  const targetRole = careerIntel?.skill_alignment?.target_role || user?.profile?.target_role || ''
+  const hasTargetRole = !!targetRole
+  const hasInterviews = (dashboardData?.overview?.completed_interviews || 0) > 0
+  const hasApplications = (dashboardData?.overview?.active_applications || 0) > 0
+  const hasGaps = (careerIntel?.prioritized_gaps || []).length > 0
+
+  const suggestedPrompts: string[] = []
+  if (!hasResume) {
+    suggestedPrompts.push("How do I upload my resume?")
+  } else {
+    if (!hasTargetRole) {
+      suggestedPrompts.push("What target roles align with my resume?")
+    } else {
+      suggestedPrompts.push(`Why is my match score for ${targetRole} ${dashboardData?.overview?.career_score ?? 0}%?`)
+      if (hasGaps) {
+        suggestedPrompts.push(`What is my highest-impact skill gap for ${targetRole}?`)
+      }
+    }
+    if (hasInterviews) {
+      suggestedPrompts.push("What are my weakest interview areas?")
+    } else {
+      suggestedPrompts.push("Start interview preparation")
+    }
+    if (hasApplications) {
+      suggestedPrompts.push("Which application should I prioritize?")
     }
   }
 
-  const suggestedPrompts = [
-    "Analyze my resume for backend roles",
-    "What skills am I missing?",
-    "Prepare me for my next interview",
-    "Research Razorpay company trajectory",
-  ]
+  if (suggestedPrompts.length < 2) {
+    suggestedPrompts.push("Analyze my resume for engineering roles")
+    suggestedPrompts.push("What skills am I missing?")
+  }
 
   // Render context data or fallback defaults
   const parsedSkillsCount = resume?.skills?.length || 0
-  const extractedTargetRole = resume?.work_experience?.[0]?.role || 'Senior Backend Engineer'
+  const extractedTargetRole = targetRole || 'Not Configured'
 
   return (
     <div className="flex h-[calc(100vh-80px)] -m-8 relative overflow-hidden bg-neutral-50 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300">
@@ -287,70 +318,53 @@ export default function CareerPage() {
             </div>
           ) : (
             <>
-              {activeSession?.messages.map((message: any) => {
+              {activeSession?.messages?.map((message: any) => {
                 const isUser = message.role === 'user'
-                const { isResumeAnalysis, isSkillGap, cleanText } = parseMessageContent(message.content)
+                const errorMeta = message.meta_data
+                const isError = errorMeta && (errorMeta.status === 'execution_limit_exceeded' || errorMeta.status === 'error')
                 
                 return (
                   <div key={message.id} className={`flex gap-4 max-w-3xl ${isUser ? 'ml-auto flex-row-reverse' : ''}`}>
                     
                     {/* Role Avatar */}
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white font-bold text-xs ${
-                      isUser ? 'bg-brand-primary' : 'bg-neutral-800'
+                      isUser ? 'bg-brand-primary' : (isError ? 'bg-amber-500' : 'bg-neutral-800')
                     }`}>
-                      {isUser ? <User size={14} /> : <Sparkles size={14} className="text-brand-ai" />}
+                      {isUser ? <User size={14} /> : <Sparkles size={14} className={isError ? 'text-white' : 'text-brand-ai'} />}
                     </div>
-
+ 
                     <div className="space-y-3 flex-1">
                       {/* Message Bubble Container */}
                       <div className={`p-4 rounded-xl text-xs leading-relaxed font-medium shadow-card border ${
                         isUser 
                           ? 'bg-brand-primary text-white border-transparent' 
-                          : 'bg-white dark:bg-[#0D1117] text-[#3d3d3d] dark:text-neutral-300 border-neutral-200 dark:border-[#1E293B]'
+                          : (isError 
+                            ? 'bg-amber-50/50 dark:bg-amber-950/10 text-neutral-800 dark:text-neutral-300 border-amber-500/20' 
+                            : 'bg-white dark:bg-[#0D1117] text-[#3d3d3d] dark:text-neutral-300 border-neutral-200 dark:border-[#1E293B]')
                       }`}>
-                        <div className="whitespace-pre-line">{cleanText}</div>
+                        <div className="whitespace-pre-line">{message.content}</div>
+                        
+                        {isError && (
+                          <div className="mt-3 pt-3 border-t border-amber-500/20 flex items-center gap-3">
+                            <Button 
+                              size="xs"
+                              variant="secondary"
+                              onClick={() => {
+                                const idx = activeSession.messages.indexOf(message)
+                                for (let i = idx - 1; i >= 0; i--) {
+                                  if (activeSession.messages[i].role === 'user') {
+                                    chatMutation.mutate(activeSession.messages[i].content)
+                                    break
+                                  }
+                                }
+                              }}
+                              disabled={chatMutation.isPending}
+                            >
+                              Retry Analysis
+                            </Button>
+                          </div>
+                        )}
                       </div>
-
-                      {/* Specialized Interactive Capability Cards */}
-                      {!isUser && isResumeAnalysis && (
-                        <Card className="border-l-4 border-l-[#0891B2] bg-neutral-50 dark:bg-neutral-900 shadow-sm p-4 animate-slide-up">
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-xs font-bold dark:text-white">Resume Analysis Results</span>
-                            <Badge variant="cyan">✓ Scored</Badge>
-                          </div>
-                          <div className="flex items-baseline gap-1.5 mb-2">
-                            <span className="text-2xl font-bold text-[#3d3d3d] dark:text-white">82%</span>
-                            <span className="text-2xs font-semibold text-neutral-400">Match score</span>
-                          </div>
-                          <p className="text-2xs text-neutral-500 mb-3 leading-relaxed">
-                            Strong semantic alignment for Senior Backend positions. Identified minor gap in distributed cache parameters.
-                          </p>
-                          <Button size="xs" variant="secondary" iconRight={<ArrowRight size={12} />} onClick={() => navigate('/resume')}>
-                            View Resume Analysis
-                          </Button>
-                        </Card>
-                      )}
-
-                      {!isUser && isSkillGap && (
-                        <Card className="border-l-4 border-l-brand-primary bg-neutral-50 dark:bg-neutral-900 shadow-sm p-4 animate-slide-up">
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-xs font-bold dark:text-white">Skill Gap Analysis</span>
-                            <Badge variant="blue">✓ DAG Mapped</Badge>
-                          </div>
-                          <div className="mb-3 space-y-1.5">
-                            <div className="text-2xs font-semibold text-neutral-500 dark:text-neutral-400">
-                              Top high impact gaps to learn next:
-                            </div>
-                            <div className="flex gap-1.5 flex-wrap">
-                              <Badge variant="neutral">Kubernetes</Badge>
-                              <Badge variant="neutral">gRPC</Badge>
-                            </div>
-                          </div>
-                          <Button size="xs" variant="secondary" iconRight={<ArrowRight size={12} />} onClick={() => navigate('/skills')}>
-                            View Skill Roadmap
-                          </Button>
-                        </Card>
-                      )}
                     </div>
                   </div>
                 )
@@ -418,15 +432,11 @@ export default function CareerPage() {
             
             <div className="flex items-center gap-1.5 flex-shrink-0">
               <button 
-                onClick={toggleRecording}
-                className={`p-2 rounded-lg transition-all ${
-                  isRecording 
-                    ? 'bg-danger text-white animate-pulse' 
-                    : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800'
-                }`}
-                title={isRecording ? "Listening..." : "Voice Input"}
+                disabled
+                className="p-2 rounded-lg text-neutral-300 dark:text-neutral-600 cursor-not-allowed"
+                title="Voice Input (Mock Interview Only)"
               >
-                {isRecording ? <MicOff size={16} /> : <Mic size={16} />}
+                <Mic size={16} />
               </button>
               
               <button 
@@ -469,7 +479,11 @@ export default function CareerPage() {
           <h3 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest mb-2">Career Score</h3>
           <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-900 border border-neutral-100 dark:border-[#1E293B] rounded-lg">
             <span className="text-xs font-semibold dark:text-white">Overall score</span>
-            <span className="text-base font-bold text-brand-primary">85 / 100</span>
+            <span className="text-base font-bold text-brand-primary">
+              {dashboardData?.overview?.career_score && dashboardData.overview.career_score > 0
+                ? `${dashboardData.overview.career_score} / 100`
+                : 'Run analysis'}
+            </span>
           </div>
         </div>
 

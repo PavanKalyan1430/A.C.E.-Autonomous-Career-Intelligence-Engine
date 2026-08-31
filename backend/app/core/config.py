@@ -42,8 +42,41 @@ class Settings(BaseSettings):
     
     # AI Keys
     GEMINI_API_KEY: str = ""
+    # Primary Groq key (backward-compat).
+    # Keys 1-4 are additional keys for round-robin rotation.
     GROQ_API_KEY: str = ""
+    GROQ_API_KEY_1: str = ""
+    GROQ_API_KEY_2: str = ""
+    GROQ_API_KEY_3: str = ""
+    GROQ_API_KEY_4: str = ""
     TAVILY_API_KEY: str = ""
+
+    # Adzuna API keys
+    ADZUNA_APP_ID: str = ""
+    ADZUNA_APP_KEY: str = ""
+    ADZUNA_COUNTRY: str = "in"
+
+    @property
+    def groq_api_keys(self) -> list:
+        """Return all configured Groq API keys as a deduplicated, ordered list.
+        GROQ_API_KEY always comes first, followed by keys 1-4.
+        Empty strings are excluded automatically.
+        """
+        candidates = [
+            self.GROQ_API_KEY,
+            self.GROQ_API_KEY_1,
+            self.GROQ_API_KEY_2,
+            self.GROQ_API_KEY_3,
+            self.GROQ_API_KEY_4,
+        ]
+        seen = set()
+        keys = []
+        for k in candidates:
+            stripped = k.strip()
+            if stripped and stripped not in seen:
+                seen.add(stripped)
+                keys.append(stripped)
+        return keys
 
     # Resume upload constraints
     MAX_RESUME_SIZE_BYTES: int = 5 * 1024 * 1024  # 5 MB hard limit

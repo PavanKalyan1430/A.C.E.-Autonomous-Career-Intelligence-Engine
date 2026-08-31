@@ -52,6 +52,9 @@ export const resumeApi = {
     })
   },
   getLatest: () => api.get('/resume/latest'),
+  compareJd: (jd_text: string) => api.post('/resume/compare-jd', { jd_text }),
+  getAtsAnalysis: (target_role?: string) => api.get('/resume/ats-analysis', { params: target_role ? { target_role } : {} }),
+  triggerAtsAnalysis: (target_role: string) => api.post('/resume/ats-analysis', { target_role }),
 }
 
 // ─── Company ─────────────────────────────────────────────────────────────────
@@ -85,6 +88,8 @@ export const careerApi = {
   getProfile: () => api.get('/career/profile'),
   getIntelligence: () => api.get('/career/intelligence'),
   refresh: () => api.post('/career/refresh'),
+  suggestRoles: (query: string, config?: any) => api.get('/career/roles/suggest', { params: { query }, ...config }),
+  searchRoles: (q: string, country?: string, config?: any) => api.get('/career/roles/search', { params: { q, country }, ...config }),
 }
 
 // ─── Applications ────────────────────────────────────────────────────────────
@@ -101,7 +106,7 @@ export const applicationsApi = {
 
 // ─── Interview ───────────────────────────────────────────────────────────────
 export const interviewApi = {
-  start: (payload: { role_title: string; company_name?: string; tech_stack_or_jd?: string }) =>
+  start: (payload: { role_title: string; company_name?: string; tech_stack_or_jd?: string; difficulty?: string }) =>
     api.post('/interview/start', payload),
   submitAnswer: (payload: { session_id: number; question_index: number; question: string; user_answer: string; speech_duration_seconds?: number }) =>
     api.post('/interview/submit-answer', payload),

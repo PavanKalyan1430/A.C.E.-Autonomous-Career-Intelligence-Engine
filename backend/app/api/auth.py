@@ -42,7 +42,7 @@ async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
         db_profile = Profile(
             user_id=db_user.id,
             full_name=default_name,
-            target_role="Software Engineer",
+            target_role=None,
             bio="Software engineering candidate focused on backend systems and AI applications.",
             preferences={
                 "difficulty": "Medium",
@@ -108,7 +108,7 @@ async def read_user_me(
         db_profile = Profile(
             user_id=user.id,
             full_name=default_name,
-            target_role="Software Engineer",
+            target_role=None,
             bio="Software engineering candidate focused on backend systems and AI applications.",
             preferences={
                 "difficulty": "Medium",
@@ -138,7 +138,7 @@ async def get_user_profile(
         profile = Profile(
             user_id=current_user.id,
             full_name=default_name,
-            target_role="Software Engineer",
+            target_role=None,
             bio="Software engineering candidate focused on backend systems and AI applications.",
             preferences={
                 "difficulty": "Medium",

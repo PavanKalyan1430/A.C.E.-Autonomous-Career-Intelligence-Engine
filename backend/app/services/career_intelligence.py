@@ -10,6 +10,7 @@ from app.models.user import (
 )
 from app.services.nlp_service import production_nlp_service
 from app.services.company_intelligence import CompanyIntelligenceService
+from app.core.llm_router import generate_content_with_routing
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +79,13 @@ class CareerIntelligenceService:
         )
         apps = list(res_apps.scalars().all())
 
-        target_role = profile.target_role if profile and profile.target_role else (
-            apps[0].role_title if apps else "Senior Backend Engineer"
-        )
-        target_company = apps[0].company_name if apps else "Stripe"
+        target_role = ""
+        if profile and profile.target_role:
+            target_role = profile.target_role
+        elif apps:
+            target_role = apps[0].role_title
+
+        target_company = apps[0].company_name if apps else ""
 
         # 4. Fetch User Memories (Weak Areas)
         res_mems = await db.execute(select(UserMemory).filter(UserMemory.user_id == user_id))
@@ -134,8 +138,17 @@ class CareerIntelligenceService:
     ) -> Dict[str, Any]:
         profile_data = await self.get_canonical_candidate_profile(user_id, db)
 
+        # Retrieve the latest resume to run ATS analysis
+        res_resumes = await db.execute(
+            select(Resume)
+            .filter(Resume.user_id == user_id)
+            .order_by(Resume.created_at.desc())
+        )
+        resumes = list(res_resumes.scalars().all())
+        latest_resume = resumes[0] if resumes else None
+
         # 1. Fetch Target Company Intelligence if company specified
-        company_tech_stack = ["Python", "FastAPI", "PostgreSQL", "Docker", "Kubernetes", "System Design", "gRPC"]
+        company_tech_stack = []
         if profile_data["target_company"]:
             try:
                 c_insights = await self.company_intel_service.get_company_insights(profile_data["target_company"])
@@ -144,128 +157,251 @@ class CareerIntelligenceService:
             except Exception as e:
                 logger.warning(f"Could not fetch company insights for {profile_data['target_company']}: {e}")
 
-        # 2. Deterministic Skill Alignment
+        # If company stack is empty or missing, try generating expected tech stack dynamically from target role using LLM
+        if not company_tech_stack and profile_data["target_role"]:
+            try:
+                role_prompt = f"""
+Identify the standard, high-demand technical skills and tool stack expected for the role: "{profile_data['target_role']}".
+Return ONLY a JSON list of strings (e.g. ["Python", "FastAPI", "Docker", "Kubernetes", "PostgreSQL"]). Do not include conversational text or markdown.
+"""
+                res = await generate_content_with_routing(prompt=role_prompt, response_mime_type="application/json", timeout=10.0)
+                role_skills = json.loads(res.strip())
+                if isinstance(role_skills, list):
+                    company_tech_stack = normalize_skill_list([str(x) for x in role_skills])
+            except Exception as e:
+                logger.warning(f"Failed to generate dynamic tech stack for target role: {e}")
+
+        # Run ATS analysis to fetch validated evidence & gaps
+        ats_analysis = None
+        if latest_resume and profile_data["target_role"]:
+            # Query user applications to see if there is an application for this role with a JD
+            app_result = await db.execute(
+                select(Application)
+                .filter(Application.user_id == user_id)
+                .order_by(Application.created_at.desc())
+            )
+            apps = list(app_result.scalars().all())
+            jd_text = None
+            matching_app = next((a for a in apps if a.role_title.lower() == profile_data["target_role"].lower() and a.jd_text), None)
+            if matching_app:
+                jd_text = matching_app.jd_text
+
+            try:
+                from app.services.ats_analyzer import ats_analyzer_service
+                ats_analysis = await ats_analyzer_service.analyze_resume_ats(
+                    raw_text=latest_resume.raw_text,
+                    parsed_data=latest_resume.parsed_data or {},
+                    target_role=profile_data["target_role"],
+                    jd_text=jd_text
+                )
+            except Exception as e:
+                logger.error(f"Failed to compute ATS analysis for career intelligence: {e}")
+
+        # 2. Dynamic Skill Alignment using validated evidence and gaps from ATS analysis if available
         candidate_skills_set = set(profile_data["verified_skills"])
         target_skills_set = set(normalize_skill_list(company_tech_stack))
 
-        matched_skills = list(candidate_skills_set & target_skills_set)
-        missing_skills = list(target_skills_set - candidate_skills_set)
+        if ats_analysis and ats_analysis.get("status") == "success":
+            matched_skills = normalize_skill_list(ats_analysis.get("matched_keywords", []))
+            missing_skills = normalize_skill_list([m.get("keyword", "") for m in ats_analysis.get("missing_keywords", [])])
+            weak_skills = normalize_skill_list(ats_analysis.get("weak_keywords", []))
+            
+            # Merge weak skills into missing/gap skills if they aren't already matched
+            for ws in weak_skills:
+                if ws not in matched_skills and ws not in missing_skills:
+                    missing_skills.append(ws)
+            
+            total_reqs = len(matched_skills) + len(missing_skills)
+            coverage_pct = round((len(matched_skills) / max(total_reqs, 1)) * 100, 1)
+        else:
+            if not target_skills_set and profile_data["weak_areas"]:
+                target_skills_set = target_skills_set.union(set(profile_data["weak_areas"]))
+            matched_skills = list(candidate_skills_set & target_skills_set)
+            missing_skills = list(target_skills_set - candidate_skills_set)
+            coverage_pct = round((len(matched_skills) / max(len(target_skills_set), 1)) * 100, 1) if target_skills_set else 100.0
 
-        coverage_pct = round((len(matched_skills) / max(len(target_skills_set), 1)) * 100, 1) if target_skills_set else 100.0
+        # Enforce that if no target_role exists, we notify user rather than fabricating data.
+        if not profile_data["target_role"]:
+            return {
+                "profile": profile_data,
+                "skill_alignment": {
+                    "target_role": "",
+                    "target_company": profile_data["target_company"],
+                    "matched_skills": [],
+                    "missing_skills": [],
+                    "coverage_percentage": 0.0
+                },
+                "prioritized_gaps": [],
+                "learning_roadmap": [],
+                "recommendations": [],
+                "ai_synthesis": "Please configure your target role in your profile to generate career intelligence."
+            }
 
-        # 3. Skill Gap Prioritization
-        prioritized_gaps = []
-        for ms in missing_skills:
-            evidence = ["company_requirement"]
-            priority = "medium"
-            reason = f"Required by target role at {profile_data['target_company']} and absent from candidate profile."
+        # 3. Dynamic Synthesis of roadmaps, prioritized gaps, and recommendations via LLM
+        prompt = f"""
+You are an expert career advisor. Evaluate this candidate's profile against the target role: "{profile_data['target_role']}".
 
-            if ms in profile_data["weak_areas"]:
-                priority = "high"
-                evidence.append("interview_weakness")
-                reason += f" Identified as an active weakness in interview performance."
-            elif ms in ["System Design", "Kubernetes", "PostgreSQL"]:
-                priority = "high"
-                reason += " High-impact core backend architecture requirement."
+Candidate Profile:
+- Verified Skills: {json.dumps(profile_data['verified_skills'])}
+- Weak Areas (from mock interviews): {json.dumps(profile_data['weak_areas'])}
+- Interview History Count: {profile_data['interview_history_count']}
+- Average Interview Score: {profile_data['average_interview_score']}
+- Target Company: "{profile_data['target_company']}"
+- Target Tech Stack: {json.dumps(company_tech_stack)}
 
-            prioritized_gaps.append({
-                "skill": ms,
-                "priority": priority,
-                "reason": reason,
-                "evidence_sources": evidence
-            })
+Analysis Gaps:
+- Matched Skills: {json.dumps(matched_skills)}
+- Missing Skills: {json.dumps(missing_skills)}
+- Coverage Percentage: {coverage_pct}%
+"""
 
-        # 4. Learning Dependency Graph (DAG)
-        prereq_graph = {
-            "Python": [],
-            "REST APIs": ["Python"],
-            "Docker": ["REST APIs"],
-            "Kubernetes": ["Docker"],
-            "System Design": ["REST APIs"],
-            "gRPC": ["REST APIs", "Kubernetes"]
-        }
+        if ats_analysis and ats_analysis.get("status") == "success":
+            prompt += f"""
+Validated Resume Evidence & Gaps (ATS Analysis):
+- Key Strengths: {json.dumps(ats_analysis.get("key_strengths", []))}
+- Evidence Matrix: {json.dumps(ats_analysis.get("evidence_matrix", []), indent=2)}
+- Actionable Improvements: {json.dumps(ats_analysis.get("actionable_improvements", []), indent=2)}
+"""
 
-        learning_roadmap = []
-        # Add completed candidate skills
-        for s in profile_data["verified_skills"][:3]:
-            learning_roadmap.append({
-                "id": s.lower().replace(" ", "_"),
-                "name": s,
-                "status": "completed",
-                "impact": "high",
-                "prerequisites": [],
-                "reason": "Verified skill in candidate profile.",
-                "estimated_effort_hours": 0
-            })
+        prompt += """
+Rules:
+1. Do not invent details. Base recommendations and gaps strictly on the comparison of verified skills versus target requirements, leveraging the validated evidence and gaps from the resume ATS analysis.
+2. Recommendations must arise only from detected gaps. If there are no missing skills, weak areas, or deficiencies, do not recommend random learning resources or paths.
+3. Roadmap must be dynamically generated. Do not use generic templates.
+4. Output must be a valid JSON matching the schema below.
 
-        # Add missing skills to roadmap with dependency check
-        for gap in prioritized_gaps:
-            s_name = gap["skill"]
-            prereqs = prereq_graph.get(s_name, [])
-            met_prereqs = [p for p in prereqs if p in candidate_skills_set]
-            is_blocked = len(met_prereqs) < len(prereqs)
+JSON Schema:
+{
+  "prioritized_gaps": [
+    {
+      "skill": "<string: gap skill name>",
+      "priority": "<string: high, medium, or low>",
+      "reason": "<string: detailed reason why this gap is critical>",
+      "evidence_sources": [<list of strings: e.g. "resume_gap", "company_requirement", "interview_weakness">]
+    }
+  ],
+  "learning_roadmap": [
+    {
+      "id": "<string: lowercase unique ID e.g. fastapi>",
+      "name": "<string: skill name>",
+      "status": "<string: completed, focus, recommended, or blocked>",
+      "impact": "<string: high, or medium>",
+      "prerequisites": [<list of strings: prerequisite skill IDs or names>],
+      "reason": "<string: reason for this placement>",
+      "estimated_effort_hours": <int: estimated hours of effort>
+    }
+  ],
+  "recommendations": [
+    {
+      "title": "<string: title of recommendation>",
+      "priority": "<string: high, medium, or low>",
+      "reason": "<string: reason why recommended>",
+      "source_metrics": [<list of strings: e.g. "interview_history_count", "resume_gap", "interview_weakness">],
+      "recommended_action": "<string: concrete next action steps>"
+    }
+  ],
+  "ai_synthesis": "<string: 2-sentence executive career roadmap summary>"
+}
 
-            status = "blocked" if is_blocked else ("focus" if gap["priority"] == "high" else "recommended")
+Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes outside the JSON.
+"""
 
-            learning_roadmap.append({
-                "id": s_name.lower().replace(" ", "_"),
-                "name": s_name,
-                "status": status,
-                "impact": gap["priority"],
-                "prerequisites": prereqs,
-                "reason": gap["reason"],
-                "estimated_effort_hours": 12 if gap["priority"] == "high" else 8
-            })
-
-        # 5. Recommendation Provenance Engine
-        recommendations = []
-        if profile_data["interview_history_count"] == 0:
-            recommendations.append({
-                "title": "Complete Initial Mock Interview",
-                "priority": "high",
-                "reason": "Complete a mock interview session to evaluate system design and response clarity.",
-                "source_metrics": ["interview_history_count"],
-                "recommended_action": "Start a new mock interview session."
-            })
-
-        for gap in prioritized_gaps[:2]:
-            recommendations.append({
-                "title": f"Master {gap['skill']} for {profile_data['target_company']}",
-                "priority": gap["priority"],
-                "reason": gap["reason"],
-                "source_metrics": gap["evidence_sources"],
-                "recommended_action": f"Review {gap['skill']} architecture guidelines and practice interview scenarios."
-            })
-
-        if profile_data["weak_areas"]:
-            recommendations.append({
-                "title": f"Target Weak Topic: {profile_data['weak_areas'][0]}",
-                "priority": "high",
-                "reason": f"Interview analysis identified {profile_data['weak_areas'][0]} as an area requiring technical depth.",
-                "source_metrics": ["interview_weakness"],
-                "recommended_action": f"Practice targeted questions on {profile_data['weak_areas'][0]}."
-            })
-
-        # 6. LLM Career Synthesis (Optional grounding)
-        ai_synthesis = None
         try:
-            from app.core.llm_router import generate_content_with_routing
-            prompt = (
-                f"Summarize candidate career readiness for {profile_data['email']}:\n"
-                f"Target Role: {profile_data['target_role']} at {profile_data['target_company']}\n"
-                f"Coverage: {coverage_pct}%\n"
-                f"Verified Skills: {', '.join(profile_data['verified_skills'])}\n"
-                f"Missing Skills: {', '.join(missing_skills)}\n"
-                f"Weak Areas: {', '.join(profile_data['weak_areas'])}\n\n"
-                f"Provide a 2-sentence executive career roadmap summary based strictly on these facts."
-            )
-            ai_synthesis = await generate_content_with_routing(
-                prompt=prompt,
-                timeout=10.0
-            )
+            res_text = await generate_content_with_routing(prompt=prompt, response_mime_type="application/json", timeout=25.0)
+            cleaned_json = res_text.strip()
+            if cleaned_json.startswith("```"):
+                lines = cleaned_json.splitlines()
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                cleaned_json = "\n".join(lines).strip()
+
+            data = json.loads(cleaned_json)
         except Exception as e:
-            logger.warning(f"AI synthesis unavailable: {e}")
-            ai_synthesis = f"Target role skill coverage for {profile_data['target_role']} at {profile_data['target_company']} is {coverage_pct}%. Focus on high-priority gaps: {', '.join(missing_skills[:2])}."
+            logger.error(f"Error generating dynamic career intelligence via LLM: {e}. Utilizing local dynamic data-driven fallback.")
+            
+            # Dynamic local fallback based strictly on user data to handle offline/test environments
+            prioritized_gaps = []
+            for ms in missing_skills:
+                evidence = ["resume_gap"]
+                priority = "medium"
+                if ms in profile_data["weak_areas"]:
+                    priority = "high"
+                    evidence.append("interview_weakness")
+                prioritized_gaps.append({
+                    "skill": ms,
+                    "priority": priority,
+                    "reason": f"Skill '{ms}' required for the target role was not found in candidate's verified skills list.",
+                    "evidence_sources": evidence
+                })
+            
+            # Ensure weak areas from mock interviews that might not be in missing_skills are also analyzed
+            for wa in profile_data["weak_areas"]:
+                if wa not in [g["skill"] for g in prioritized_gaps]:
+                    prioritized_gaps.append({
+                        "skill": wa,
+                        "priority": "high",
+                        "reason": f"Active weakness in '{wa}' was detected in mock interview history.",
+                        "evidence_sources": ["interview_weakness"]
+                    })
+
+            learning_roadmap = []
+            for gap in prioritized_gaps:
+                learning_roadmap.append({
+                    "id": gap["skill"].lower().replace(" ", "_"),
+                    "name": gap["skill"],
+                    "status": "focus" if gap["priority"] == "high" else "recommended",
+                    "impact": gap["priority"],
+                    "prerequisites": [],
+                    "reason": gap["reason"],
+                    "estimated_effort_hours": 12 if gap["priority"] == "high" else 8
+                })
+
+            recommendations = []
+            if profile_data["interview_history_count"] == 0:
+                recommendations.append({
+                    "title": "Complete Initial Mock Interview",
+                    "priority": "high",
+                    "reason": "Mock interview profile is currently empty.",
+                    "source_metrics": ["interview_history_count"],
+                    "recommended_action": "Launch your first mock interview simulation to assess system design and communication skills."
+                })
+            for gap in prioritized_gaps:
+                recommendations.append({
+                    "title": f"Master {gap['skill']}",
+                    "priority": gap["priority"],
+                    "reason": gap["reason"],
+                    "source_metrics": gap["evidence_sources"],
+                    "recommended_action": f"Review core concepts, architecture guidelines, and typical interview questions for {gap['skill']}."
+                })
+
+            data = {
+                "prioritized_gaps": prioritized_gaps,
+                "learning_roadmap": learning_roadmap,
+                "recommendations": recommendations,
+                "ai_synthesis": f"Target role skill coverage for {profile_data['target_role']} is {coverage_pct}%."
+            }
+
+        # Enrich prerequisites and force verified skills to completed status
+        enriched_roadmap = []
+        verified_skills_lower = {s.lower() for s in profile_data["verified_skills"]}
+        for node in data.get("learning_roadmap", []):
+            node_copy = dict(node)
+            raw_prereqs = node_copy.get("prerequisites", [])
+            enriched_prereqs = []
+            for p in raw_prereqs:
+                p_name = p.get("name") if isinstance(p, dict) else p
+                met = p_name.lower() in verified_skills_lower
+                enriched_prereqs.append({
+                    "name": p_name,
+                    "met": met
+                })
+            node_copy["prerequisites"] = enriched_prereqs
+            node_name = node_copy.get("name", "")
+            if node_name.lower() in verified_skills_lower:
+                node_copy["status"] = "completed"
+            enriched_roadmap.append(node_copy)
 
         return {
             "profile": profile_data,
@@ -276,10 +412,10 @@ class CareerIntelligenceService:
                 "missing_skills": missing_skills,
                 "coverage_percentage": coverage_pct
             },
-            "prioritized_gaps": prioritized_gaps,
-            "learning_roadmap": learning_roadmap,
-            "recommendations": recommendations,
-            "ai_synthesis": ai_synthesis
+            "prioritized_gaps": data.get("prioritized_gaps", []),
+            "learning_roadmap": enriched_roadmap,
+            "recommendations": data.get("recommendations", []),
+            "ai_synthesis": data.get("ai_synthesis")
         }
 
 career_intelligence_service = CareerIntelligenceService()

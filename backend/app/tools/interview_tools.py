@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from typing import Optional
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 from app.core.config import settings
@@ -14,13 +15,14 @@ logger = logging.getLogger(__name__)
 class QuestionGenInput(BaseModel):
     role_title: str = Field(description="Target role title e.g. 'Backend Engineer'")
     tech_stack_or_jd: str = Field(description="Tech stack or full job description text")
+    difficulty: Optional[str] = Field(default="Medium", description="Selected difficulty level: Easy, Medium, or Hard")
 
 class AnswerEvalInput(BaseModel):
     question: str = Field(description="The mock interview question asked")
     user_answer: str = Field(description="The candidate's response text")
 
 @tool(args_schema=QuestionGenInput)
-async def generate_interview_questions_tool(role_title: str, tech_stack_or_jd: str) -> str:
+async def generate_interview_questions_tool(role_title: str, tech_stack_or_jd: str, difficulty: str = "Medium") -> str:
     """
     Generates technical mock interview questions 100% dynamically via LLM and TF-IDF keyphrase analysis.
     Zero hardcoded question templates.
@@ -32,10 +34,14 @@ async def generate_interview_questions_tool(role_title: str, tech_stack_or_jd: s
     # 2. Generate questions via LLM dynamically
     try:
         prompt = (
-            f"You are a Principal Software Engineer interviewing a candidate for a {role_title} role.\n"
+            f"You are a Principal Software Engineer interviewing a candidate for a {role_title} role at a {difficulty} difficulty level.\n"
             f"Based on the following job requirements/tech stack:\n{tech_stack_or_jd}\n\n"
             f"Generate 3 highly specific, deep-dive technical interview questions testing architectural trade-offs, "
             f"concurrency, and system design related to: {', '.join(skills)}.\n"
+            f"Adjust the difficulty of the questions to strictly match '{difficulty}' level:\n"
+            f"- Easy: Focus on basic concepts, definitions, and standard use-cases.\n"
+            f"- Medium: Focus on intermediate trade-offs, configuration parameters, and typical design choices.\n"
+            f"- Hard: Focus on deep architectural trade-offs, concurrency/race conditions, high-scale performance bottlenecks, and fault-tolerance.\n"
             f"Return JSON format with key 'questions' containing a list of 3 strings."
         )
         from app.core.llm_router import generate_content_with_routing
@@ -51,11 +57,24 @@ async def generate_interview_questions_tool(role_title: str, tech_stack_or_jd: s
         logger.error(f"Error generating LLM interview questions: {e}")
 
     # Pure dynamic NLP keyphrase synthesis fallback if LLM is unavailable
-    dynamic_questions = [
-        f"Deep Dive on {skills[0] if len(skills) > 0 else 'System Architecture'}: Explain how you design and troubleshoot failure modes in production.",
-        f"Hands-on {skills[1] if len(skills) > 1 else 'API Design'}: Describe a complex system trade-off you evaluated and how you benchmarked performance.",
-        f"Scalability for {skills[2] if len(skills) > 2 else 'Distributed Services'}: How do you manage data consistency and rate-limiting under high concurrency?"
-    ]
+    if difficulty.lower() == "easy":
+        dynamic_questions = [
+            f"Explain the basic concepts and purpose of {skills[0] if len(skills) > 0 else 'System Architecture'}.",
+            f"How do you implement and perform simple checks on {skills[1] if len(skills) > 1 else 'API Design'}?",
+            f"What are the main use-cases of {skills[2] if len(skills) > 2 else 'Distributed Services'} in software development?"
+        ]
+    elif difficulty.lower() == "hard":
+        dynamic_questions = [
+            f"Deep Dive on {skills[0] if len(skills) > 0 else 'System Architecture'}: Explain how you design and troubleshoot complex failure modes, concurrency issues, and race conditions in production.",
+            f"Hands-on {skills[1] if len(skills) > 1 else 'API Design'}: Describe a high-scale system trade-off you evaluated, how you managed state consistency, and how you benchmarked performance under high throughput.",
+            f"Scalability for {skills[2] if len(skills) > 2 else 'Distributed Services'}: How do you design active-active replication, distributed consensus, and fault-tolerant rate-limiting under high concurrency?"
+        ]
+    else:
+        dynamic_questions = [
+            f"Deep Dive on {skills[0] if len(skills) > 0 else 'System Architecture'}: Explain how you design and troubleshoot failure modes in production.",
+            f"Hands-on {skills[1] if len(skills) > 1 else 'API Design'}: Describe a complex system trade-off you evaluated and how you benchmarked performance.",
+            f"Scalability for {skills[2] if len(skills) > 2 else 'Distributed Services'}: How do you manage data consistency and rate-limiting under high concurrency?"
+        ]
     return json.dumps({"questions": dynamic_questions, "assessed_skills": skills}, indent=2)
 
 @tool(args_schema=AnswerEvalInput)

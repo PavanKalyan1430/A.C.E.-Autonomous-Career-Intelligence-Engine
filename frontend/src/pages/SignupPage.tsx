@@ -67,23 +67,23 @@ export default function SignupPage() {
   const features = [
     {
       icon: <Target size={18} className="text-brand-ai" />,
-      title: 'Resume & JD Matching',
-      desc: '384-dim dense vector embeddings scoring deep semantic match',
+      title: 'Resume & JD Intelligence',
+      desc: 'Semantic match scoring aligned to target role requirements and evidence',
     },
     {
       icon: <Building2 size={18} className="text-brand-ai" />,
-      title: 'Live Web Research',
-      desc: 'Tavily web search extracting real-time engineering tech stacks',
+      title: 'Live Company Research',
+      desc: 'Real-time engineering tech stack analysis and candidate compatibility signals',
     },
     {
       icon: <Map size={18} className="text-brand-ai" />,
-      title: 'Topological Skill DAGs',
-      desc: 'NetworkX graph engines mapping prerequisite learning paths',
+      title: 'Prerequisite Skill Maps',
+      desc: 'Topological gap analysis charting your optimal career learning sequence',
     },
     {
       icon: <MessageSquare size={18} className="text-brand-ai" />,
-      title: 'Real-Time Voice Studio',
-      desc: 'Groq Cloud ~150ms speech transcription with zero disk storage',
+      title: 'AI Voice Interview Studio',
+      desc: 'Real-time technical interview coaching with instant communication diagnostics',
     },
   ]
 
@@ -114,7 +114,7 @@ export default function SignupPage() {
           {/* AI Active Indicator */}
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#18291E] border border-[#345635] text-xs font-semibold text-[#AEC3B0] mb-6">
             <span className="ai-pulse" />
-            <span>Autonomous ReAct Agent Framework</span>
+            <span>Autonomous Career Intelligence Framework</span>
           </div>
 
           {/* Main Hero Title */}
@@ -123,7 +123,7 @@ export default function SignupPage() {
             <span className="text-brand-ai">Career Operating System</span>
           </h2>
           <p className="text-[#AEC3B0] text-sm sm:text-base leading-relaxed max-w-lg mb-8">
-            Integrated multi-agent platform connecting resume analytics, company research, topological skill roadmaps, and real-time voice interview coaching.
+            An integrated career engine connecting resume analytics, live company research, skill prerequisite roadmaps, and real-time interview coaching.
           </p>
 
           {/* Feature List */}
@@ -145,16 +145,16 @@ export default function SignupPage() {
         {/* Bottom Metrics Bar */}
         <div className="relative z-10 pt-8 mt-8 border-t border-[#18291E] grid grid-cols-3 gap-4">
           <div>
-            <span className="text-xl sm:text-2xl font-extrabold text-white">92%</span>
-            <p className="text-[11px] text-[#AEC3B0] font-medium mt-0.5">Match Accuracy</p>
+            <span className="text-xl sm:text-2xl font-extrabold text-white">Full-Stack</span>
+            <p className="text-[11px] text-[#AEC3B0] font-medium mt-0.5">Career Guidance</p>
           </div>
           <div>
-            <span className="text-xl sm:text-2xl font-extrabold text-white">~150ms</span>
-            <p className="text-[11px] text-[#AEC3B0] font-medium mt-0.5">Voice Latency</p>
+            <span className="text-xl sm:text-2xl font-extrabold text-white">Real-Time</span>
+            <p className="text-[11px] text-[#AEC3B0] font-medium mt-0.5">Voice Feedback</p>
           </div>
           <div>
-            <span className="text-xl sm:text-2xl font-extrabold text-white">0 Disk</span>
-            <p className="text-[11px] text-[#AEC3B0] font-medium mt-0.5">RAM Processing</p>
+            <span className="text-xl sm:text-2xl font-extrabold text-white">Private</span>
+            <p className="text-[11px] text-[#AEC3B0] font-medium mt-0.5">Secure Processing</p>
           </div>
         </div>
       </div>

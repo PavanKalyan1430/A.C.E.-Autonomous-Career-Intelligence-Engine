@@ -24,43 +24,16 @@ import {
   Globe
 } from 'lucide-react'
 
-// --- Default fallback/adapter placeholder data if search not run yet ---
-const DEFAULT_COMPANY_INSIGHTS = {
-  company_name: 'Google',
-  tech_stack: ['Go', 'C++', 'Java', 'gRPC', 'Kubernetes', 'Borg', 'Spanner'],
-  interview_process: '1. Technical Phone Screen (1 coding session)\n2. Onsite Loops (3 coding rounds, 1 System Design round)\n3. Googleyness & Leadership round (behavioral focus).',
-  hiring_trends: 'Active hiring signals observed for core Infrastructure and large-scale AI/ML Platform engineering groups.',
-  candidate_experience_signals: 'Candidates emphasize strong focus on algorithm optimization, clean code structure, and scalable distributed system design tradeoffs.',
-  sources: [
-    {
-      title: 'Google Engineering Architecture & Tech Stack',
-      url: 'https://engineering.googleblog.com',
-      domain: 'googleblog.com',
-      category: 'Official/Engineering',
-      tier: 'Tier 1: Official Company',
-      relevance_score: 0.95
-    },
-    {
-      title: 'Google Software Engineering Interview Experience',
-      url: 'https://leetcode.com/discuss/interview-question',
-      domain: 'leetcode.com',
-      category: 'Candidate Experience',
-      tier: 'Tier 5: Candidate Experience (Anecdotal)',
-      relevance_score: 0.88
-    }
-  ]
-}
-
 export default function CompaniesPage() {
   const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
-  const [activeSearchCompany, setActiveSearchCompany] = useState('Google')
+  const [activeSearchCompany, setActiveSearchCompany] = useState('')
 
   // Query live insights from /api/v1/company/{company_name}
   const { data: insights, isLoading, isError, error } = useQuery({
     queryKey: ['companyInsights', activeSearchCompany],
     queryFn: async () => {
-      if (!activeSearchCompany) return DEFAULT_COMPANY_INSIGHTS
+      if (!activeSearchCompany) return null
       const res = await companyApi.getInsights(activeSearchCompany)
       return res.data
     },
@@ -113,10 +86,32 @@ export default function CompaniesPage() {
       </form>
 
       {/* Live Search Status Banner */}
-      {isLoading ? (
+      {!activeSearchCompany ? (
+        <Card className="text-center py-12 px-6 border-dashed">
+          <Building2 size={40} className="mx-auto mb-3 text-brand-primary/60" />
+          <h3 className="text-lg font-bold text-[#3d3d3d] dark:text-white mb-1">Company Intelligence Research</h3>
+          <p className="text-xs text-neutral-500 max-w-md mx-auto mb-6 leading-relaxed">
+            Search any target technology company above to extract engineering tech stacks, hiring trends, candidate experience signals, and live web research sources.
+          </p>
+          <div className="flex justify-center gap-2 flex-wrap">
+            {['Razorpay', 'Swiggy', 'Atlassian', 'Google'].map((c) => (
+              <button
+                key={c}
+                onClick={() => {
+                  setSearchTerm(c)
+                  setActiveSearchCompany(c)
+                }}
+                className="px-3 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-xs font-semibold text-neutral-600 dark:text-neutral-300 hover:bg-brand-primary hover:text-white transition-colors"
+              >
+                Search {c}
+              </button>
+            ))}
+          </div>
+        </Card>
+      ) : isLoading ? (
         <div className="p-4 bg-brand-cyan10 border border-brand-cyan/20 rounded-xl flex items-center justify-center gap-2 text-xs font-semibold text-[#0891B2]">
           <span className="ai-pulse bg-[#0891B2]" />
-          <span className="animate-pulse">Researching {activeSearchCompany} live engineering signals & Tavily web sources...</span>
+          <span className="animate-pulse">Researching {activeSearchCompany} live engineering signals & web sources...</span>
         </div>
       ) : (
         <div className="p-3 bg-brand-light dark:bg-brand-primary/10 border border-brand-primary/20 rounded-xl flex items-center justify-between text-xs font-semibold text-brand-primary">

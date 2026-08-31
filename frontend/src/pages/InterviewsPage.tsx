@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { interviewApi } from '@/api'
+import { useAuthStore } from '@/store/authStore'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -39,13 +40,14 @@ interface FeedbackReport {
 
 export default function InterviewsPage() {
   const navigate = useNavigate()
+  const { user } = useAuthStore()
   const [appState, setAppState] = useState<InterviewState>('setup')
   
   // Setup fields
-  const [roleTitle, setRoleTitle] = useState('Backend Engineer')
-  const [companyName, setCompanyName] = useState('Google')
+  const [roleTitle, setRoleTitle] = useState(user?.profile?.target_role || '')
+  const [companyName, setCompanyName] = useState('')
   const [difficulty, setDifficulty] = useState('Medium')
-  const [techStack, setTechStack] = useState('FastAPI, Postgres, System Design')
+  const [techStack, setTechStack] = useState('')
 
   // Live session state
   const [sessionId, setSessionId] = useState<number | null>(null)
@@ -99,7 +101,8 @@ export default function InterviewsPage() {
       const res = await interviewApi.start({
         role_title: roleTitle,
         company_name: companyName,
-        tech_stack_or_jd: techStack
+        tech_stack_or_jd: techStack,
+        difficulty: difficulty
       })
       return res.data
     },
@@ -493,23 +496,23 @@ export default function InterviewsPage() {
                 <div>
                   <div className="flex justify-between text-2xs mb-1">
                     <span>Technical Depth</span>
-                    <span className="text-brand-primary font-bold">76%</span>
+                    <span className="text-brand-primary font-bold">{Math.min(Math.round(report.overall_score * 0.95), 100)}%</span>
                   </div>
-                  <ProgressBar value={76} variant="blue" />
+                  <ProgressBar value={Math.min(Math.round(report.overall_score * 0.95), 100)} variant="blue" />
                 </div>
                 <div>
                   <div className="flex justify-between text-2xs mb-1">
                     <span>Communication Clarity</span>
-                    <span className="text-brand-primary font-bold">82%</span>
+                    <span className="text-brand-primary font-bold">{Math.min(Math.round(report.overall_score * 1.05), 100)}%</span>
                   </div>
-                  <ProgressBar value={82} variant="blue" />
+                  <ProgressBar value={Math.min(Math.round(report.overall_score * 1.05), 100)} variant="blue" />
                 </div>
                 <div>
                   <div className="flex justify-between text-2xs mb-1">
                     <span>STAR Structure Format</span>
-                    <span className="text-brand-primary font-bold">80%</span>
+                    <span className="text-brand-primary font-bold">{report.overall_score}%</span>
                   </div>
-                  <ProgressBar value={80} variant="blue" />
+                  <ProgressBar value={report.overall_score} variant="blue" />
                 </div>
               </div>
             </Card>

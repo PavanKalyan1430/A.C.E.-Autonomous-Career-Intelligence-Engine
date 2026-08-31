@@ -5,13 +5,18 @@ import os
 import asyncio
 from typing import Dict, Any, Optional
 from app.core.config import settings
+from app.core.groq_key_rotator import groq_key_rotator
 
 logger = logging.getLogger(__name__)
 
 def _build_groq_client():
-    """Build a fresh Groq client using the current settings value (not a module-level cache).
-    This ensures that API key patches in tests are picked up at call time."""
-    api_key = settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY")
+    """Build a fresh Groq client using the next rotated key.
+    Round-robin rotation distributes load evenly across all configured
+    GROQ_API_KEY / GROQ_API_KEY_1..4 keys."""
+    api_key = groq_key_rotator.next_key()
+    if not api_key:
+        # Hard fallback: direct env lookup (covers bare test environments)
+        api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         return None
     try:

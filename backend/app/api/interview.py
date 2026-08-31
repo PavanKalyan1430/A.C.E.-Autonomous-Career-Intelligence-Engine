@@ -94,7 +94,8 @@ async def start_interview_session(
     # Generate dynamic questions via LLM
     questions_json_str = await generate_interview_questions_tool.ainvoke({
         "role_title": payload.role_title,
-        "tech_stack_or_jd": tech_context
+        "tech_stack_or_jd": tech_context,
+        "difficulty": payload.difficulty or "Medium"
     })
     llm_latency = round(time.time() - t0, 3)
     logger.info(f"LLM question generation latency: {llm_latency}s")

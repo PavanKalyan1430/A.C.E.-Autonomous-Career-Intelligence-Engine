@@ -36,7 +36,7 @@ export default function SettingsPage() {
   const { user: storeUser, updateUser, logout } = useAuthStore()
 
   // Tab State
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'preferences' | 'memory' | 'membership'>('profile')
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'preferences' | 'memory'>('profile')
 
   // Dynamic Profile Form State — No Hardcoded Values
   const [fullName, setFullName] = useState('')
@@ -294,7 +294,6 @@ export default function SettingsPage() {
           { id: 'security', label: 'Security & Password', icon: <Key size={16} /> },
           { id: 'preferences', label: 'AI Preferences', icon: <Bot size={16} /> },
           { id: 'memory', label: 'Career Memories', icon: <Database size={16} /> },
-          { id: 'membership', label: 'Membership Plan', icon: <Shield size={16} /> },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -676,49 +675,6 @@ export default function SettingsPage() {
                 No custom agent memories saved yet. Add a career fact above to seed context.
               </div>
             )}
-          </Card>
-        )}
-
-        {/* ── TAB 5: MEMBERSHIP PLAN ── */}
-        {activeTab === 'membership' && (
-          <Card className="p-6 border border-neutral-200 dark:border-[#1E293B] max-w-3xl">
-            <h3 className="text-sm font-bold text-[#3d3d3d] dark:text-white pb-3 border-b border-neutral-100 dark:border-neutral-800 mb-6 flex items-center gap-2">
-              <Shield size={18} className="text-brand-primary" /> Active Membership & Tiers
-            </h3>
-
-            <div className="p-6 bg-gradient-to-br from-brand-primary/10 via-transparent to-brand-primary/5 border border-brand-primary/20 rounded-2xl relative overflow-hidden">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-brand-primary text-white rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0">
-                    <Sparkles size={28} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-lg font-bold text-neutral-800 dark:text-white">Pro Career Membership</h4>
-                      <Badge variant="blue" size="xs" className="bg-brand-primary text-white">Active</Badge>
-                    </div>
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 font-medium">
-                      Full access to A.C.E. multi-agent career operating system.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 pt-6 border-t border-brand-primary/10 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold">
-                <div className="flex items-center gap-2 text-neutral-700 dark:text-neutral-300">
-                  <Zap size={16} className="text-brand-primary" /> 384-Dim Vector Candidate Embeddings
-                </div>
-                <div className="flex items-center gap-2 text-neutral-700 dark:text-neutral-300">
-                  <Zap size={16} className="text-brand-primary" /> Live Tavily Corporate Research Search
-                </div>
-                <div className="flex items-center gap-2 text-neutral-700 dark:text-neutral-300">
-                  <Zap size={16} className="text-brand-primary" /> ~150ms Groq Whisper STT Audio Streaming
-                </div>
-                <div className="flex items-center gap-2 text-neutral-700 dark:text-neutral-300">
-                  <Zap size={16} className="text-brand-primary" /> Zero-Disk Encryption & User Isolation
-                </div>
-              </div>
-            </div>
           </Card>
         )}
 

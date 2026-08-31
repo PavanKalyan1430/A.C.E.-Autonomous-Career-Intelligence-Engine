@@ -216,3 +216,31 @@ async def test_refresh_career_intelligence(client: AsyncClient, auth_headers_use
 async def test_unauthenticated_career_request(client: AsyncClient):
     res = await client.get("/api/v1/career/intelligence")
     assert res.status_code == 401
+
+# --- 7. ZERO-MOCK ROLE SUGGESTIONS ERRORS ---
+@pytest.mark.anyio
+async def test_search_roles_unconfigured_error(client: AsyncClient, auth_headers_user_a: dict):
+    from app.services.occupation_provider import occupation_service
+    # Mocking unconfigured/missing provider state
+    original_provider = occupation_service.provider
+    occupation_service.provider = None
+    try:
+        res = await client.get("/api/v1/career/roles/search?q=DevOps", headers=auth_headers_user_a)
+        assert res.status_code == 503
+        detail = res.json()["detail"]
+        assert detail["status"] == "unconfigured"
+        assert "unconfigured" in detail["message"]
+    finally:
+        occupation_service.provider = original_provider
+
+@pytest.mark.anyio
+async def test_search_roles_provider_failure_error(client: AsyncClient, auth_headers_user_a: dict):
+    from unittest.mock import patch
+    from app.services.occupation_provider import OccupationProviderUnavailableError
+    
+    with patch("app.services.occupation_provider.occupation_service.search_roles", side_effect=OccupationProviderUnavailableError("Adzuna API connection timeout")):
+        res = await client.get("/api/v1/career/roles/search?q=DevOps", headers=auth_headers_user_a)
+        assert res.status_code == 503
+        detail = res.json()["detail"]
+        assert detail["status"] == "unavailable"
+        assert "temporarily unavailable" in detail["message"]

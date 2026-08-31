@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { resumeApi, careerApi } from '@/api'
+import { normalizePercentage } from '@/utils/error'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -28,7 +29,6 @@ import {
   ArrowDownLeft
 } from 'lucide-react'
 
-// --- Graph Types & Mock DAG mapping ---
 interface SkillNode {
   id: string
   name: string
@@ -39,69 +39,12 @@ interface SkillNode {
   effort: string
 }
 
-const MOCK_NODES: Record<string, SkillNode> = {
-  python: {
-    id: 'python',
-    name: 'Python',
-    status: 'completed',
-    impact: 'high',
-    prereqs: [],
-    reason: 'Identified as your core programming language in your uploaded resume.',
-    effort: '0 hours (Completed)'
-  },
-  rest: {
-    id: 'rest',
-    name: 'REST APIs',
-    status: 'completed',
-    impact: 'high',
-    prereqs: [{ name: 'Python', met: true }],
-    reason: 'Required for microservice communication architectures.',
-    effort: '0 hours (Completed)'
-  },
-  system_design: {
-    id: 'system_design',
-    name: 'System Design',
-    status: 'focus',
-    impact: 'high',
-    prereqs: [{ name: 'REST APIs', met: true }],
-    reason: 'Crucial for scaling services. Identified as a weakness area in recent mock sessions.',
-    effort: '12 hours'
-  },
-  docker: {
-    id: 'docker',
-    name: 'Docker',
-    status: 'focus',
-    impact: 'high',
-    prereqs: [{ name: 'REST APIs', met: true }],
-    reason: 'Base containerization format. Required before learning cloud orchestration.',
-    effort: '8 hours'
-  },
-  kubernetes: {
-    id: 'kubernetes',
-    name: 'Kubernetes',
-    status: 'recommended',
-    impact: 'high',
-    prereqs: [{ name: 'Docker', met: true }],
-    reason: 'Frequently required across 82% of target backend engineering opportunities.',
-    effort: '16 hours'
-  },
-  grpc: {
-    id: 'grpc',
-    name: 'gRPC',
-    status: 'blocked',
-    impact: 'medium',
-    prereqs: [{ name: 'REST APIs', met: true }, { name: 'Kubernetes', met: false }],
-    reason: 'Prerequisite for high-performance service mesh communication.',
-    effort: '6 hours'
-  }
-}
-
 export default function SkillsPage() {
   const navigate = useNavigate()
-  const [targetRole, setTargetRole] = useState('Backend Engineer')
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>('kubernetes')
+  const queryClient = useQueryClient()
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
 
-  // 1. Fetch resume parser details
+  // 1. Fetch resume status
   const { data: resume, isLoading: isResumeLoading } = useQuery({
     queryKey: ['latestResume'],
     queryFn: async () => {
@@ -121,13 +64,24 @@ export default function SkillsPage() {
     retry: false
   })
 
-  // Active selected node or dynamic node from API
-  const dynamicRoadmap = careerIntel?.learning_roadmap || []
-  const coveragePercentage = careerIntel?.skill_alignment?.coverage_percentage || 72
+  const targetRole = careerIntel?.skill_alignment?.target_role || ''
 
-  const activeNode = selectedNodeId ? (
-    dynamicRoadmap.find((n: any) => n.id === selectedNodeId) || MOCK_NODES[selectedNodeId] || MOCK_NODES['kubernetes']
-  ) : MOCK_NODES['kubernetes']
+  const dynamicRoadmap: SkillNode[] = (careerIntel?.learning_roadmap || []).map((node: any) => ({
+    id: node.id || node.name.toLowerCase().replace(/\s+/g, '_'),
+    name: node.name,
+    status: (node.status || 'recommended') as SkillNode['status'],
+    impact: (node.impact || 'high') as SkillNode['impact'],
+    prereqs: (node.prerequisites || []).map((p: any) => ({
+      name: typeof p === 'string' ? p : p.name,
+      met: typeof p === 'string' ? true : !!p.met
+    })),
+    reason: node.reason || 'Recommended by ACE career intelligence engine.',
+    effort: node.estimated_effort_hours ? `${node.estimated_effort_hours} hours` : 'Variable effort'
+  }))
+
+  const coveragePercentage = normalizePercentage(careerIntel?.skill_alignment?.coverage_percentage)
+
+  const activeNode = dynamicRoadmap.find((n) => n.id === selectedNodeId) || dynamicRoadmap[0] || null
 
   const isLoading = isResumeLoading || isIntelLoading
 
@@ -166,6 +120,26 @@ export default function SkillsPage() {
     )
   }
 
+  // ─── EMPTY STATE (No Target Role Configured) ───────────────────────────
+  if (resume && !targetRole) {
+    return (
+      <div className="max-w-md mx-auto text-center py-16 px-4 animate-fade-in">
+        <div className="w-16 h-16 bg-brand-light dark:bg-brand-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-brand-primary/20">
+          <Target size={32} className="text-brand-primary animate-pulse-dot" />
+        </div>
+        <h2 className="text-2xl font-bold tracking-tight text-neutral-700 dark:text-white mb-2">
+          Configure target role to see roadmap
+        </h2>
+        <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-6 leading-relaxed">
+          You need to configure a target role in order to see your personalized learning path and skill alignment diagnostics.
+        </p>
+        <Button onClick={() => navigate('/resume')} icon={<ArrowRight size={16} />}>
+          Configure Target Role
+        </Button>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-6 animate-fade-in text-neutral-700 dark:text-neutral-300">
       
@@ -178,15 +152,7 @@ export default function SkillsPage() {
         
         <div className="flex items-center gap-3">
           <span className="text-2xs font-bold text-neutral-400 dark:text-neutral-500 uppercase">Target Role</span>
-          <select 
-            value={targetRole}
-            onChange={(e) => setTargetRole(e.target.value)}
-            className="bg-white dark:bg-[#0D1117] border border-neutral-200 dark:border-[#1E293B] rounded-lg px-3 py-2 outline-none text-xs font-semibold shadow-sm"
-          >
-            <option value="Backend Engineer">Backend Engineer</option>
-            <option value="DevOps Engineer">DevOps Engineer</option>
-            <option value="Frontend Engineer">Frontend Engineer</option>
-          </select>
+          <Badge variant="blue">{targetRole}</Badge>
         </div>
       </div>
 
@@ -226,96 +192,47 @@ export default function SkillsPage() {
               </div>
             </div>
 
-            {/* Custom SVG/HTML Node Connections Flowchart */}
-            <div className="flex flex-col items-center py-6 space-y-4">
-              
-              {/* Python */}
-              <button 
-                onClick={() => setSelectedNodeId('python')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-                  selectedNodeId === 'python'
-                    ? 'ring-2 ring-brand-primary/40 scale-105'
-                    : ''
-                } bg-neutral-100 dark:bg-[#1E293B] text-neutral-500 border-neutral-300 dark:border-[#334155]`}
-              >
-                Python ✓
-              </button>
-              
-              <ArrowDown size={16} className="text-neutral-300 dark:text-neutral-700" />
-
-              {/* REST APIs */}
-              <button 
-                onClick={() => setSelectedNodeId('rest')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-                  selectedNodeId === 'rest'
-                    ? 'ring-2 ring-brand-primary/40 scale-105'
-                    : ''
-                } bg-neutral-100 dark:bg-[#1E293B] text-neutral-500 border-neutral-300 dark:border-[#334155]`}
-              >
-                REST APIs ✓
-              </button>
-
-              <ArrowDown size={16} className="text-neutral-300 dark:text-neutral-700" />
-
-              {/* System Design */}
-              <button 
-                onClick={() => setSelectedNodeId('system_design')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-                  selectedNodeId === 'system_design'
-                    ? 'ring-2 ring-brand-primary/40 scale-105'
-                    : ''
-                } bg-brand-primary text-white border-transparent`}
-              >
-                System Design ●
-              </button>
-
-              {/* Split row: Docker (Focus) vs Kubernetes (Recommended) */}
-              <div className="w-full max-w-sm flex items-center justify-between py-2">
-                <div className="flex flex-col items-center">
-                  <ArrowDownLeft size={24} className="text-neutral-300 dark:text-neutral-700 mr-8" />
-                  <button 
-                    onClick={() => setSelectedNodeId('docker')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-                      selectedNodeId === 'docker'
-                        ? 'ring-2 ring-brand-primary/40 scale-105'
-                        : ''
-                    } bg-brand-primary text-white border-transparent`}
-                  >
-                    Docker ●
-                  </button>
-                </div>
-
-                <div className="flex flex-col items-center">
-                  <ArrowDownRight size={24} className="text-[#0891B2]/50 ml-8" />
-                  <button 
-                    onClick={() => setSelectedNodeId('kubernetes')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-                      selectedNodeId === 'kubernetes'
-                        ? 'ring-2 ring-brand-cyan/40 scale-105'
-                        : ''
-                    } bg-brand-cyan10 text-[#0891B2] border-brand-cyan/20`}
-                  >
-                    Kubernetes ○
-                  </button>
-                </div>
+            {/* Dynamic Skill Nodes List & Flowchart */}
+            {dynamicRoadmap.length > 0 ? (
+              <div className="flex flex-col items-center py-6 space-y-3">
+                {dynamicRoadmap.map((node, index) => {
+                  const isSelected = activeNode?.id === node.id
+                  const isCompleted = node.status === 'completed'
+                  const isFocus = node.status === 'focus'
+                  const isRecommended = node.status === 'recommended'
+                  
+                  return (
+                    <React.Fragment key={node.id}>
+                      {index > 0 && <ArrowDown size={16} className="text-neutral-300 dark:text-neutral-700" />}
+                      
+                      <button
+                        onClick={() => setSelectedNodeId(node.id)}
+                        className={`px-5 py-2.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 ${
+                          isSelected ? 'ring-2 ring-brand-primary/50 scale-105 shadow-md' : 'hover:scale-102'
+                        } ${
+                          isCompleted
+                            ? 'bg-neutral-100 dark:bg-[#1E293B] text-neutral-600 dark:text-neutral-300 border-neutral-300 dark:border-[#334155]'
+                            : isFocus
+                            ? 'bg-brand-primary text-white border-transparent'
+                            : isRecommended
+                            ? 'bg-brand-cyan10 text-[#0891B2] border-brand-cyan/20'
+                            : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 border-transparent'
+                        }`}
+                      >
+                        <span>{node.name}</span>
+                        {isCompleted && <span>✓</span>}
+                        {isFocus && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+                        {isRecommended && <span className="w-1.5 h-1.5 rounded-full bg-[#0891B2]" />}
+                      </button>
+                    </React.Fragment>
+                  )
+                })}
               </div>
-
-              {/* gRPC */}
-              <div className="w-full flex flex-col items-center">
-                <ArrowDown size={16} className="text-neutral-300 dark:text-neutral-700" />
-                <button 
-                  onClick={() => setSelectedNodeId('grpc')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-                    selectedNodeId === 'grpc'
-                      ? 'ring-2 ring-brand-primary/40 scale-105'
-                      : ''
-                  } bg-neutral-200 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500 border-transparent`}
-                >
-                  gRPC
-                </button>
+            ) : (
+              <div className="p-8 text-center text-xs text-neutral-400">
+                No skill prerequisite graph generated. Upload a resume or refresh career profile.
               </div>
-
-            </div>
+            )}
           </div>
         </Card>
 
@@ -338,13 +255,13 @@ export default function SkillsPage() {
                 <h3 className="text-lg font-bold text-[#3d3d3d] dark:text-white mb-2">{activeNode.name}</h3>
                 
                 <div className="flex justify-between text-2xs mb-4 font-semibold text-neutral-500">
-                  <span>Impact Impact</span>
+                  <span>Target Impact</span>
                   <span className="text-brand-primary uppercase">{activeNode.impact} Impact</span>
                 </div>
 
                 <div className="space-y-4">
                   {/* Prerequisites */}
-                  {activeNode.prereqs.length > 0 && (
+                  {activeNode.prereqs && activeNode.prereqs.length > 0 && (
                     <div>
                       <h4 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest mb-1.5">Prerequisites</h4>
                       <div className="space-y-1">
@@ -378,14 +295,7 @@ export default function SkillsPage() {
                   iconRight={<ArrowRight size={14} />}
                   onClick={() => navigate('/career')}
                 >
-                  Start Learning Path
-                </Button>
-                <Button 
-                  fullWidth 
-                  variant="ghost"
-                  onClick={() => navigate('/career')}
-                >
-                  Ask ACE about {activeNode.name}
+                  Ask ACE Agent
                 </Button>
               </div>
             </div>
@@ -398,52 +308,69 @@ export default function SkillsPage() {
       </div>
 
       {/* Bottom Grid: Next Best Skill & Path Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
-        
-        {/* Next Best Skill */}
-        <Card className="border-t-4 border-t-[#0891B2] flex flex-col justify-between">
-          <div>
-            <h3 className="text-2xs font-bold text-neutral-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-              <Sparkles size={14} className="text-[#0891B2] animate-pulse-dot" /> Next Best Skill
-            </h3>
-            <div className="flex justify-between items-start mb-2">
-              <h4 className="text-base font-bold text-[#3d3d3d] dark:text-white">Kubernetes</h4>
-              <Badge variant="cyan">High Impact</Badge>
-            </div>
-            <p className="text-2xs text-neutral-500 dark:text-neutral-400 leading-normal max-w-sm mb-4">
-              Strengthen container orchestration to improve your match score compatibility by up to 12%.
-            </p>
-          </div>
+      {(() => {
+        const completedCount = dynamicRoadmap.filter(n => n.status === 'completed').length
+        const remainingCount = dynamicRoadmap.filter(n => n.status !== 'completed').length
+        const totalEffortHours = dynamicRoadmap
+          .filter(n => n.status !== 'completed')
+          .reduce((acc, n) => acc + parseInt(n.effort) || 12, 0)
+        const nextSkill = dynamicRoadmap.find(n => n.status === 'focus') || dynamicRoadmap.find(n => n.status === 'recommended')
 
-          <Button variant="secondary" iconRight={<ArrowRight size={14} />} onClick={() => navigate('/career')}>
-            Start Learning Path
-          </Button>
-        </Card>
-
-        {/* Path Summary stats */}
-        <Card className="flex flex-col justify-between">
-          <div>
-            <h3 className="text-2xs font-bold text-neutral-500 uppercase tracking-widest mb-4 flex items-center gap-1.5">
-              <Layers size={14} className="text-brand-primary" /> Path Summary
-            </h3>
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
             
-            <div className="grid grid-cols-3 gap-4 text-center divide-x divide-neutral-100 dark:divide-neutral-800">
+            {/* Next Best Skill */}
+            <Card className="border-t-4 border-t-[#0891B2] flex flex-col justify-between">
               <div>
-                <div className="text-metric font-bold text-brand-primary leading-none">3</div>
-                <div className="text-[10px] text-neutral-400 dark:text-neutral-500 uppercase font-semibold mt-2">Remaining</div>
+                <h3 className="text-2xs font-bold text-neutral-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-[#0891B2] animate-pulse-dot" /> Next Best Skill
+                </h3>
+                {nextSkill ? (
+                  <>
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="text-base font-bold text-[#3d3d3d] dark:text-white">{nextSkill.name}</h4>
+                      <Badge variant="cyan">{nextSkill.impact === 'high' ? 'High Impact' : 'Medium Impact'}</Badge>
+                    </div>
+                    <p className="text-2xs text-neutral-500 dark:text-neutral-400 leading-normal max-w-sm mb-4">
+                      {nextSkill.reason}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-2xs text-neutral-400 mb-4">All skills in your current roadmap are completed.</p>
+                )}
               </div>
+
+              <Button variant="secondary" iconRight={<ArrowRight size={14} />} onClick={() => navigate('/career')}>
+                Start Learning Path
+              </Button>
+            </Card>
+
+            {/* Path Summary stats */}
+            <Card className="flex flex-col justify-between">
               <div>
-                <div className="text-metric font-bold text-brand-primary leading-none">2</div>
-                <div className="text-[10px] text-neutral-400 dark:text-neutral-500 uppercase font-semibold mt-2">Completed</div>
+                <h3 className="text-2xs font-bold text-neutral-500 uppercase tracking-widest mb-4 flex items-center gap-1.5">
+                  <Layers size={14} className="text-brand-primary" /> Path Summary
+                </h3>
+                
+                <div className="grid grid-cols-3 gap-4 text-center divide-x divide-neutral-100 dark:divide-neutral-800">
+                  <div>
+                    <div className="text-metric font-bold text-brand-primary leading-none">{remainingCount}</div>
+                    <div className="text-[10px] text-neutral-400 dark:text-neutral-500 uppercase font-semibold mt-2">Remaining</div>
+                  </div>
+                  <div>
+                    <div className="text-metric font-bold text-brand-primary leading-none">{completedCount}</div>
+                    <div className="text-[10px] text-neutral-400 dark:text-neutral-500 uppercase font-semibold mt-2">Completed</div>
+                  </div>
+                  <div>
+                    <div className="text-metric font-bold text-brand-primary leading-none">{totalEffortHours > 0 ? `${totalEffortHours}h` : '—'}</div>
+                    <div className="text-[10px] text-neutral-400 dark:text-neutral-500 uppercase font-semibold mt-2">Est. Effort</div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <div className="text-metric font-bold text-brand-primary leading-none">24h</div>
-                <div className="text-[10px] text-neutral-400 dark:text-neutral-500 uppercase font-semibold mt-2">Est. Effort</div>
-              </div>
-            </div>
+            </Card>
           </div>
-        </Card>
-      </div>
+        )
+      })()}
 
     </div>
   )

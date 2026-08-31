@@ -53,6 +53,7 @@ class Resume(Base):
     file_name: Mapped[str] = mapped_column(String, nullable=False)
     raw_text: Mapped[str] = mapped_column(String, nullable=False)
     parsed_data: Mapped[dict] = mapped_column(JSON, nullable=True)  # Structured skills, projects, work exp
+    ats_analysis: Mapped[dict] = mapped_column(JSON, default=dict, nullable=True)  # Persisted ATS analyses mapped by target role
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
     user: Mapped["User"] = relationship("User", back_populates="resumes")

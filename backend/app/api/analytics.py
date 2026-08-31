@@ -167,27 +167,51 @@ async def get_dashboard_metrics(
         if m.category == "weak_area":
             weak_areas_set.add(m.memory_text)
 
-    # 5. Skill Analytics & DAG Gap Analysis
-    target_jd = "Senior Backend Engineer. Skills: Python, Go, FastAPI, PostgreSQL, Distributed Systems, Kubernetes, System Design."
-    dag_result = await production_nlp_service.compute_dynamic_skill_graph_gap(verified_skills, target_jd)
+    # 5. Skill Analytics — strictly DB-driven, zero LLM calls.
+    # The dashboard must load instantly. LLM-based analysis (ATS, skill-gap DAG,
+    # career synthesis) is triggered explicitly by the user from the dedicated pages.
+    # Showing fabricated or hardcoded skill gaps here violates data integrity.
+    matched_skills: List[str] = []   # skills user HAS (from resume)
+    missing_skills: List[str] = []   # skills from interview feedback not in resume
+    learning_order: List[str] = []   # populated only from stored profile data
 
-    missing_skills = dag_result.get("missing_skills", [])
-    learning_order = dag_result.get("topological_learning_order", [])
+    target_role = profile.target_role if profile else None
+
+    if target_role or verified_skills:
+        from app.services.career_intelligence import career_intelligence_service
+        try:
+            candidate_profile = await career_intelligence_service.get_canonical_candidate_profile(
+                current_user.id, db
+            )
+            # Verified skills from resume = matched/confirmed skills
+            matched_skills = verified_skills
+
+            # Missing skills = interview-identified weak areas not present in resume.
+            # These are real data points, not hallucinated gaps from a hardcoded JD.
+            interview_weak_areas = candidate_profile.get("weak_areas", [])
+            missing_skills = [
+                wa for wa in interview_weak_areas
+                if wa not in [s.lower() for s in verified_skills]
+            ]
+        except Exception as e:
+            logger.warning(f"Could not load career profile for dashboard skill section: {e}")
+            matched_skills = verified_skills
 
     skill_progress_items: List[SkillProgressItem] = []
-    # Add top verified skills
-    for s in verified_skills[:4]:
+    # Verified/matched skills from resume
+    display_verified = matched_skills if matched_skills else verified_skills
+    for s in display_verified[:4]:
         skill_progress_items.append(SkillProgressItem(
             skill=s,
-            val=85,
+            val=100,
             badge="Verified"
         ))
-    # Add top missing skills with AI suggestion badge
+    # Interview-identified improvement areas (only real data from feedback)
     for ms in missing_skills[:3]:
         skill_progress_items.append(SkillProgressItem(
             skill=ms,
-            val=45,
-            badge="AI Suggested",
+            val=0,
+            badge="Needs Work",
             ai=True
         ))
 
@@ -199,9 +223,9 @@ async def get_dashboard_metrics(
 
     top_job_matches: List[JobMatchItem] = []
     for app_obj in user_applications[:3]:
-        m_score = 80
+        m_score = 0
         if app_obj.analysis and isinstance(app_obj.analysis, dict):
-            m_score = int(app_obj.analysis.get("match_percentage", 80))
+            m_score = int(app_obj.analysis.get("match_percentage", 0))
         top_job_matches.append(JobMatchItem(
             company=app_obj.company_name,
             role=app_obj.role_title,
@@ -316,15 +340,18 @@ async def get_dashboard_metrics(
     ]
 
     # Calculate overall Career Score
-    career_score_calc = 80
+    career_score_calc = 0
     if scores_list:
-        career_score_calc = int(min(max(avg_score, 50), 95))
-    elif latest_resume:
-        career_score_calc = 75
+        career_score_calc = int(avg_score)
+    elif verified_skills:
+        career_score_calc = int(min((len(verified_skills) / 7.0) * 100, 100))
+
+    analyzed_apps = [app for app in user_applications if app.analysis and isinstance(app.analysis, dict) and "match_percentage" in app.analysis]
+    real_match_avg = int(sum(app.analysis["match_percentage"] for app in analyzed_apps) / len(analyzed_apps)) if analyzed_apps else 0
 
     overview_kpi = KPIOverview(
         career_score=career_score_calc,
-        job_match_percentage=85 if verified_skills else 60,
+        job_match_percentage=real_match_avg,
         interview_score=avg_score,
         total_interviews=total_sessions_count,
         completed_interviews=completed_sessions_count,

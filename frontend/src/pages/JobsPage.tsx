@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { applicationsApi, resumeApi, companyApi } from '@/api'
+import { applicationsApi, resumeApi, companyApi, careerApi } from '@/api'
+import { normalizePercentage } from '@/utils/error'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -28,93 +29,6 @@ import {
   Layers
 } from 'lucide-react'
 
-// --- Mock/Adapter Data representing job discovery records ---
-const MOCK_JOBS = [
-  {
-    id: 101,
-    company: 'Razorpay',
-    role: 'Senior Backend Engineer',
-    location: 'Remote',
-    type: 'Full-time',
-    match: 92,
-    matchedSkills: ['Python', 'FastAPI', 'PostgreSQL', 'Distributed Systems'],
-    missingSkills: ['Kubernetes'],
-    description: 'Lead design of Razorpay core payments pipelines using distributed cache logic.',
-    whyMatch: 'Excellent experience with high-traffic SQL optimization and FastAPI development.',
-    nextStep: 'Complete a System Design mock practice session before scheduling interviews.',
-    sources: [
-      {
-        title: 'Razorpay Engineering Tech Stack & Architecture',
-        url: 'https://razorpay.com/blog/engineering',
-        domain: 'razorpay.com',
-        category: 'Official/Engineering',
-        tier: 'Tier 1: Official Company',
-        relevance_score: 0.92
-      }
-    ]
-  },
-  {
-    id: 102,
-    company: 'Swiggy',
-    role: 'Senior Backend Engineer',
-    location: 'Bangalore',
-    type: 'Full-time',
-    match: 87,
-    matchedSkills: ['Python', 'SQL', 'FastAPI'],
-    missingSkills: ['Kubernetes', 'gRPC'],
-    description: 'Scale delivery logistics calculations and topological routing APIs.',
-    whyMatch: 'Strong matching for Python POS linguistic structures and parsed back-end verbs.',
-    nextStep: 'Strengthen Kubernetes and topological routing prerequisite graphs.',
-    sources: [
-      {
-        title: 'Swiggy Bytes Engineering Blog',
-        url: 'https-[#]bytes.swiggy.com',
-        domain: 'swiggy.com',
-        category: 'Official/Engineering',
-        tier: 'Tier 1: Official Company',
-        relevance_score: 0.88
-      }
-    ]
-  },
-  {
-    id: 103,
-    company: 'Atlassian',
-    role: 'Backend Engineer',
-    location: 'Hybrid',
-    type: 'Full-time',
-    match: 84,
-    matchedSkills: ['Python', 'Distributed Systems'],
-    missingSkills: ['AWS', 'Kubernetes'],
-    description: 'Work on Jira cloud infrastructure and real-time event streaming systems.',
-    whyMatch: 'Demonstrated experience working on cloud scale products and system design.',
-    nextStep: 'Acquire AWS Cloud Practitioner badge to offset cloud prerequisite gap.',
-    sources: [
-      {
-        title: 'Atlassian Technical Architecture',
-        url: 'https://atlassian.com/engineering',
-        domain: 'atlassian.com',
-        category: 'Official/Engineering',
-        tier: 'Tier 1: Official Company',
-        relevance_score: 0.85
-      }
-    ]
-  },
-  {
-    id: 104,
-    company: 'Razorpay',
-    role: 'Junior Backend Developer',
-    location: 'Remote',
-    type: 'Full-time',
-    match: 75,
-    matchedSkills: ['Python', 'PostgreSQL'],
-    missingSkills: ['FastAPI', 'Distributed Systems'],
-    description: 'Maintain merchant onboarding pipelines and transactional database tables.',
-    whyMatch: 'Solid foundation in relational databases and Python programming.',
-    nextStep: 'Build a FastAPI project to showcase microservice architecture patterns.',
-    sources: []
-  }
-]
-
 export default function JobsPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -122,13 +36,17 @@ export default function JobsPage() {
   // Filtering states
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedRole, setSelectedRole] = useState('All')
-  const [selectedLoc, setSelectedLoc] = useState('All')
-  const [selectedRemote, setSelectedRemote] = useState('All')
-  const [minMatch, setMinMatch] = useState(0)
+  const [selectedStatus, setSelectedStatus] = useState('All')
 
   // Drawer states
   const [activeJobId, setActiveJobId] = useState<number | null>(null)
-  
+
+  // Track New Opportunity Modal state
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [newCompany, setNewCompany] = useState('')
+  const [newRole, setNewRole] = useState('')
+  const [newJdText, setNewJdText] = useState('')
+
   // 1. Fetch latest resume status (checks if empty uploader needed)
   const { data: resume, isLoading: isResumeLoading } = useQuery({
     queryKey: ['latestResume'],
@@ -139,8 +57,18 @@ export default function JobsPage() {
     retry: false
   })
 
-  // 2. Fetch already tracked applications to show custom badge
-  const { data: applications } = useQuery({
+  // 2. Fetch real career intelligence for skills & alignment
+  const { data: careerIntel } = useQuery({
+    queryKey: ['careerIntelligence'],
+    queryFn: async () => {
+      const res = await careerApi.getIntelligence()
+      return res.data
+    },
+    retry: false
+  })
+
+  // 3. Fetch tracked applications
+  const { data: applications, isLoading: isAppsLoading } = useQuery({
     queryKey: ['applicationsList'],
     queryFn: async () => {
       const res = await applicationsApi.list()
@@ -148,14 +76,14 @@ export default function JobsPage() {
     }
   })
 
-  // 3. Mutation to create application directly from Jobs page CTA
-  const applyMutation = useMutation({
-    mutationFn: async (job: typeof MOCK_JOBS[0]) => {
+  // 4. Mutation to create tracked opportunity
+  const createOpportunityMutation = useMutation({
+    mutationFn: async () => {
       const payload = {
-        company_name: job.company,
-        role_title: job.role,
+        company_name: newCompany,
+        role_title: newRole,
         status: 'applied',
-        jd_text: job.description
+        jd_text: newJdText
       }
       const res = await applicationsApi.create(payload)
       return res.data
@@ -163,24 +91,48 @@ export default function JobsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['applicationsList'] })
       queryClient.invalidateQueries({ queryKey: ['analyticsDashboard'] })
+      setShowAddModal(false)
+      setNewCompany('')
+      setNewRole('')
+      setNewJdText('')
     }
   })
 
-  // Filter logic
-  const filteredJobs = MOCK_JOBS.filter(job => {
-    const matchesSearch = job.company.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          job.role.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesRole = selectedRole === 'All' || job.role.includes(selectedRole)
-    const matchesLoc = selectedLoc === 'All' || job.location.includes(selectedLoc)
-    const matchesRemote = selectedRemote === 'All' || 
-                          (selectedRemote === 'Remote' && job.location === 'Remote') ||
-                          (selectedRemote === 'On-site/Hybrid' && job.location !== 'Remote')
-    const matchesScore = job.match >= minMatch
-    
-    return matchesSearch && matchesRole && matchesLoc && matchesRemote && matchesScore
+  // Normalize real application data into opportunity items
+  const liveJobs = (applications || []).map((app: any) => {
+    const analysis = app.analysis || {}
+    const rawCoverage = careerIntel?.skill_alignment?.coverage_percentage
+    const matchScore = analysis.match_percentage ? normalizePercentage(analysis.match_percentage) : normalizePercentage(rawCoverage)
+
+    const missing = analysis.required_keyphrases || careerIntel?.skill_alignment?.missing_skills || []
+    const userSkills = resume?.skills || careerIntel?.profile?.verified_skills || []
+
+    return {
+      id: app.id,
+      company: app.company_name,
+      role: app.role_title,
+      location: 'Remote/Hybrid',
+      type: 'Full-time',
+      status: app.status || 'applied',
+      match: matchScore,
+      matchedSkills: userSkills.slice(0, 5),
+      missingSkills: missing,
+      description: app.jd_text || 'Tracked career opportunity.',
+      whyMatch: `Profile aligns with key role parameters. Matching computed via semantic NLP cosine analysis.`,
+      nextStep: missing.length > 0 ? `Focus on learning ${missing[0]} to close candidate gap.` : 'Prepare for technical interview rounds.'
+    }
   })
 
-  const selectedJob = MOCK_JOBS.find(j => j.id === activeJobId)
+  const filteredJobs = liveJobs.filter((job: any) => {
+    const matchesSearch = job.company.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          job.role.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesRole = selectedRole === 'All' || job.role.toLowerCase().includes(selectedRole.toLowerCase())
+    const matchesStatus = selectedStatus === 'All' || job.status === selectedStatus
+    
+    return matchesSearch && matchesRole && matchesStatus
+  })
+
+  const selectedJob = liveJobs.find((j: any) => j.id === activeJobId)
 
   // Render loading state
   if (isResumeLoading) {
@@ -229,11 +181,16 @@ export default function JobsPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-2">
           <div>
             <h1 className="text-3xl font-bold text-[#3d3d3d] dark:text-white tracking-tight mb-1">Job Intelligence</h1>
-            <p className="text-neutral-600 dark:text-neutral-400 font-medium">Discover opportunities aligned with your career profile and technical skills.</p>
+            <p className="text-neutral-600 dark:text-neutral-400 font-medium">Discover and track job opportunities aligned with your candidate profile.</p>
           </div>
-          <Button variant="secondary" icon={<Sparkles size={16} />} onClick={() => navigate('/career')}>
-            Ask A.C.E. Agent
-          </Button>
+          <div className="flex gap-3">
+            <Button variant="secondary" icon={<Sparkles size={16} />} onClick={() => navigate('/career')}>
+              Ask A.C.E.
+            </Button>
+            <Button icon={<Target size={16} />} onClick={() => setShowAddModal(true)}>
+              Track Opportunity
+            </Button>
+          </div>
         </div>
 
         {/* Filter controls */}
@@ -244,7 +201,7 @@ export default function JobsPage() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by company or role title (e.g. Razorpay, Swiggy, Backend)..."
+              placeholder="Search tracked opportunities by company or role title..."
               className="w-full pl-10 pr-4 py-2.5 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-lg text-xs text-neutral-800 dark:text-white placeholder-neutral-400 outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
             />
           </div>
@@ -259,38 +216,24 @@ export default function JobsPage() {
                 className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-md px-2.5 py-1.5 outline-none text-2xs font-semibold text-neutral-700 dark:text-white"
               >
                 <option value="All">All Roles</option>
-                <option value="Senior">Senior Backend</option>
-                <option value="Staff">Staff Software</option>
-                <option value="Junior">Junior Backend</option>
+                <option value="Backend">Backend</option>
+                <option value="Engineer">Engineer</option>
+                <option value="Developer">Developer</option>
               </select>
             </div>
 
-            {/* Location Filter */}
+            {/* Status Filter */}
             <div className="flex items-center gap-1.5">
-              <span className="text-neutral-400 dark:text-neutral-500 text-2xs uppercase">Location</span>
+              <span className="text-neutral-400 dark:text-neutral-500 text-2xs uppercase">Status</span>
               <select 
-                value={selectedLoc}
-                onChange={(e) => setSelectedLoc(e.target.value)}
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
                 className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-md px-2.5 py-1.5 outline-none text-2xs font-semibold text-neutral-700 dark:text-white"
               >
-                <option value="All">All Locations</option>
-                <option value="Remote">Remote</option>
-                <option value="Bangalore">Bangalore</option>
-                <option value="Hybrid">Hybrid</option>
-              </select>
-            </div>
-
-            {/* Match Score Filter */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-neutral-400 dark:text-neutral-500 text-2xs uppercase">Min Match</span>
-              <select 
-                value={minMatch}
-                onChange={(e) => setMinMatch(Number(e.target.value))}
-                className="bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-md px-2.5 py-1.5 outline-none text-2xs font-semibold text-neutral-700 dark:text-white"
-              >
-                <option value={0}>All matches</option>
-                <option value={80}>&gt; 80% match</option>
-                <option value={90}>&gt; 90% match</option>
+                <option value="All">All Statuses</option>
+                <option value="applied">Applied</option>
+                <option value="interviewing">Interviewing</option>
+                <option value="offer">Offer</option>
               </select>
             </div>
           </div>
@@ -300,72 +243,73 @@ export default function JobsPage() {
         <div className="space-y-4">
           {filteredJobs.length === 0 ? (
             <Card className="text-center py-12 text-neutral-400">
-              <p className="text-xs">No matching opportunities found. Try adjusting your filters.</p>
+              <Compass size={36} className="mx-auto mb-3 text-neutral-400" />
+              <p className="text-sm font-semibold text-neutral-700 dark:text-white mb-1">No tracked job opportunities yet</p>
+              <p className="text-xs text-neutral-400 mb-4 max-w-sm mx-auto">
+                Track custom target opportunities to generate semantic match scores and prerequisite skill gap maps.
+              </p>
+              <Button size="sm" icon={<Target size={16} />} onClick={() => setShowAddModal(true)}>
+                Track Opportunity
+              </Button>
             </Card>
           ) : (
-            filteredJobs.map((job) => {
-              const isTracked = applications?.some((app: any) => app.company_name === job.company && app.role_title === job.role)
-              
-              return (
-                <div 
-                  key={job.id} 
-                  className="bg-white dark:bg-[#0D1117] border border-neutral-200 dark:border-[#1E293B] rounded-xl p-5 hover:border-brand-primary/40 dark:hover:border-brand-primary/40 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-card"
-                >
-                  <div className="space-y-2.5 flex-1">
-                    <div className="flex justify-between items-start md:items-center gap-3">
-                      <div>
-                        <h3 className="text-base font-bold text-[#3d3d3d] dark:text-white leading-tight">{job.role}</h3>
-                        <div className="flex items-center gap-2 text-2xs font-semibold text-neutral-400 dark:text-neutral-500 mt-1">
-                          <span className="text-brand-primary font-bold">{job.company}</span>
-                          <span>·</span>
-                          <span className="flex items-center gap-1"><MapPin size={12} /> {job.location}</span>
-                          <span>·</span>
-                          <span className="flex items-center gap-1"><Clock size={12} /> {job.type}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        <Badge variant="blue" className="font-bold bg-brand-light border-brand-primary/20 text-brand-primary px-2.5 py-1 text-xs">
-                          {job.match}% MATCH
-                        </Badge>
+            filteredJobs.map((job: any) => (
+              <div 
+                key={job.id} 
+                className="bg-white dark:bg-[#0D1117] border border-neutral-200 dark:border-[#1E293B] rounded-xl p-5 hover:border-brand-primary/40 dark:hover:border-brand-primary/40 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-card"
+              >
+                <div className="space-y-2.5 flex-1">
+                  <div className="flex justify-between items-start md:items-center gap-3">
+                    <div>
+                      <h3 className="text-base font-bold text-[#3d3d3d] dark:text-white leading-tight">{job.role}</h3>
+                      <div className="flex items-center gap-2 text-2xs font-semibold text-neutral-400 dark:text-neutral-500 mt-1">
+                        <span className="text-brand-primary font-bold">{job.company}</span>
+                        <span>·</span>
+                        <span className="flex items-center gap-1"><MapPin size={12} /> {job.location}</span>
+                        <span>·</span>
+                        <span className="flex items-center gap-1"><Clock size={12} /> {job.type}</span>
                       </div>
                     </div>
-
-                    <p className="text-xs text-neutral-600 dark:text-neutral-400 line-clamp-2 leading-relaxed font-medium">
-                      {job.description}
-                    </p>
-
-                    <div className="flex gap-1.5 flex-wrap pt-1">
-                      {job.matchedSkills.map((sk, idx) => (
-                        <Badge key={idx} variant="blue" size="xs" className="font-semibold">✓ {sk}</Badge>
-                      ))}
-                      {job.missingSkills.map((sk, idx) => (
-                        <Badge key={idx} variant="warning" size="xs" className="font-semibold">! {sk}</Badge>
-                      ))}
+                    
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <Badge variant="blue" className="font-bold bg-brand-light border-brand-primary/20 text-brand-primary px-2.5 py-1 text-xs">
+                        {job.match}% MATCH
+                      </Badge>
                     </div>
                   </div>
 
-                  <div className="flex md:flex-col gap-2 items-stretch flex-shrink-0">
-                    <Button 
-                      size="xs" 
-                      variant="secondary"
-                      onClick={() => setActiveJobId(job.id)}
-                    >
-                      View Match Analysis
-                    </Button>
-                    <Button 
-                      size="xs" 
-                      variant={isTracked ? 'secondary' : 'primary'}
-                      disabled={isTracked || applyMutation.isPending}
-                      icon={isTracked ? <CheckCircle size={14} className="text-brand-primary" /> : undefined}
-                      onClick={() => applyMutation.mutate(job)}
-                    >
-                      {isTracked ? 'Tracked' : 'Quick Apply'}
-                    </Button>
+                  <p className="text-xs text-neutral-600 dark:text-neutral-400 line-clamp-2 leading-relaxed font-medium">
+                    {job.description}
+                  </p>
+
+                  <div className="flex gap-1.5 flex-wrap pt-1">
+                    {job.matchedSkills.map((sk: string, idx: number) => (
+                      <Badge key={idx} variant="blue" size="xs" className="font-semibold">✓ {sk}</Badge>
+                    ))}
+                    {job.missingSkills.map((sk: string, idx: number) => (
+                      <Badge key={idx} variant="warning" size="xs" className="font-semibold">! {sk}</Badge>
+                    ))}
                   </div>
                 </div>
-              )
-            })
+
+                <div className="flex md:flex-col gap-2 items-stretch flex-shrink-0">
+                  <Button 
+                    size="xs" 
+                    variant="secondary"
+                    onClick={() => setActiveJobId(job.id)}
+                  >
+                    View Match Analysis
+                  </Button>
+                  <Button 
+                    size="xs" 
+                    variant="primary"
+                    onClick={() => navigate('/interviews')}
+                  >
+                    Practice Interview
+                  </Button>
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>
@@ -412,7 +356,7 @@ export default function JobsPage() {
                   <AlertTriangle size={14} className="text-amber-500" /> Skill Gaps
                 </h4>
                 <div className="flex flex-wrap gap-1.5">
-                  {selectedJob.missingSkills.map((sk, i) => (
+                  {selectedJob.missingSkills.map((sk: string, i: number) => (
                     <Badge key={i} variant="warning" size="xs" className="font-semibold">{sk}</Badge>
                   ))}
                 </div>
@@ -435,7 +379,7 @@ export default function JobsPage() {
                     <Globe size={14} className="text-brand-primary" /> Research Sources
                   </h4>
                   <div className="space-y-2">
-                    {selectedJob.sources.map((src, i) => (
+                    {selectedJob.sources.map((src: any, i: number) => (
                       <ResearchSourceCard key={i} source={src} />
                     ))}
                   </div>
@@ -462,6 +406,76 @@ export default function JobsPage() {
             </Button>
           </div>
         </aside>
+      )}
+
+      {/* ── TRACK OPPORTUNITY MODAL ────────────────────────────────────── */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md bg-white dark:bg-[#0D1117] border-neutral-200 dark:border-[#1E293B] shadow-dropdown flex flex-col">
+            <div className="p-4 border-b border-neutral-200 dark:border-[#1E293B] flex items-center justify-between">
+              <h3 className="font-bold text-sm dark:text-white flex items-center gap-2">
+                <Target size={16} className="text-brand-primary" /> Track New Opportunity
+              </h3>
+              <button onClick={() => setShowAddModal(false)} className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (newCompany.trim() && newRole.trim()) {
+                  createOpportunityMutation.mutate()
+                }
+              }}
+              className="p-5 space-y-4 text-xs"
+            >
+              <div>
+                <label className="block text-2xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Company Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Razorpay, Swiggy, Atlassian"
+                  value={newCompany}
+                  onChange={(e) => setNewCompany(e.target.value)}
+                  className="w-full px-3 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-lg outline-none focus:border-brand-primary text-neutral-800 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-2xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Role Title</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Senior Backend Engineer"
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value)}
+                  className="w-full px-3 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-lg outline-none focus:border-brand-primary text-neutral-800 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-2xs font-bold text-neutral-500 uppercase tracking-wider mb-1">Job Description / Requirements (Optional)</label>
+                <textarea
+                  rows={4}
+                  placeholder="Paste job description text to trigger backend semantic match scoring and gap analysis..."
+                  value={newJdText}
+                  onChange={(e) => setNewJdText(e.target.value)}
+                  className="w-full px-3 py-2 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-lg outline-none focus:border-brand-primary text-neutral-800 dark:text-white"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button type="button" variant="secondary" fullWidth onClick={() => setShowAddModal(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" fullWidth loading={createOpportunityMutation.isPending}>
+                  Save & Track
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
       )}
 
     </div>

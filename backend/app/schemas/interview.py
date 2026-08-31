@@ -6,6 +6,7 @@ class InterviewStartRequest(BaseModel):
     role_title: str = Field(description="Target job role e.g. 'Backend Engineer'")
     company_name: Optional[str] = Field(default=None, description="Optional target company name e.g. 'Google'")
     tech_stack_or_jd: Optional[str] = Field(default=None, description="Optional tech stack or full job description text")
+    difficulty: Optional[str] = Field(default="Medium", description="Selected difficulty level: Easy, Medium, or Hard")
 
 class InterviewStartResponse(BaseModel):
     session_id: int
