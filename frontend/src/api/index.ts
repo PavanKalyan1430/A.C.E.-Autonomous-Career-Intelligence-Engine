@@ -117,3 +117,22 @@ export const interviewApi = {
   finish: (payload: { session_id: number }) =>
     api.post('/interview/finish', payload),
 }
+
+// ─── Job Discovery ──────────────────────────────────────────────────────────
+export const jobsApi = {
+  discover: (params: {
+    keyword?: string
+    location?: string
+    role?: string
+    job_type?: string
+    experience?: string
+    remote_onsite?: string
+    skills?: string
+    salary_min?: string
+    sort_by?: string
+    page?: number
+    limit?: number
+  }) => api.get('/jobs/discover', { params }),
+  apply: (payload: any) => api.post('/jobs/apply', payload),
+  track: (payload: any) => api.post('/jobs/track', payload),
+}

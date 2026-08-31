@@ -13,11 +13,22 @@ from app.api.interview import router as interview_router
 from app.api.applications import router as application_router
 from app.api.analytics import router as analytics_router
 from app.api.career import router as career_router
+from app.api.jobs import router as jobs_router
 
 from sqlalchemy import text
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Verify database connection on startup
+    try:
+        import asyncio
+        async with engine.connect() as conn:
+            await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=5.0)
+            logger.info("Database connection verified successfully.")
+    except Exception as e:
+        logger.critical(f"Database connection failed on startup: {e}")
+        raise RuntimeError(f"Database connection failed: {e}")
+
     # Initialize database tables on startup only for SQLite (development/tests)
     if settings.DATABASE_URL.startswith("sqlite"):
         async with engine.begin() as conn:
@@ -25,6 +36,11 @@ async def lifespan(app: FastAPI):
             for col, col_type in [("full_name", "VARCHAR"), ("preferences", "JSON")]:
                 try:
                     await conn.execute(text(f"ALTER TABLE profiles ADD COLUMN {col} {col_type}"))
+                except Exception:
+                    pass
+            for col, col_type in [("location", "VARCHAR"), ("experience", "VARCHAR"), ("job_type", "VARCHAR"), ("remote_onsite", "VARCHAR")]:
+                try:
+                    await conn.execute(text(f"ALTER TABLE jobs ADD COLUMN {col} {col_type}"))
                 except Exception:
                     pass
     yield
@@ -54,6 +70,7 @@ app.include_router(interview_router, prefix=settings.API_V1_STR)
 app.include_router(application_router, prefix=settings.API_V1_STR)
 app.include_router(analytics_router, prefix=settings.API_V1_STR)
 app.include_router(career_router, prefix=settings.API_V1_STR)
+app.include_router(jobs_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def read_root():

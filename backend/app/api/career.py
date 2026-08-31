@@ -1,5 +1,6 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -27,13 +28,16 @@ async def get_candidate_profile(
     return CanonicalCandidateProfile(**profile_data)
 
 @router.get("/roles/search")
+@router.get("/roles/suggest")
 async def search_roles(
-    q: str,
+    q: Optional[str] = Query(None),
+    query: Optional[str] = Query(None),
     country: str = "in",
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    if not q or len(q.strip()) < 2:
+    search_query = q or query or ""
+    if not search_query or len(search_query.strip()) < 2:
         return []
     from app.services.occupation_provider import (
         occupation_service,
@@ -42,7 +46,7 @@ async def search_roles(
         OccupationProviderUnavailableError
     )
     try:
-        return await occupation_service.search_roles(q, country=country)
+        return await occupation_service.search_roles(search_query, country=country)
     except OccupationProviderCredentialError as e:
         logger.warning(f"Adzuna credential/authorization error: {e}")
         reason = "credentials_invalid" if "auth" in str(e).lower() else "credentials_missing_or_invalid"

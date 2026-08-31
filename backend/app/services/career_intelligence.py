@@ -161,8 +161,10 @@ class CareerIntelligenceService:
         if not company_tech_stack and profile_data["target_role"]:
             try:
                 role_prompt = f"""
-Identify the standard, high-demand technical skills and tool stack expected for the role: "{profile_data['target_role']}".
-Return ONLY a JSON list of strings (e.g. ["Python", "FastAPI", "Docker", "Kubernetes", "PostgreSQL"]). Do not include conversational text or markdown.
+Identify the standard, high-demand technical skills and tool stack expected for the target role: "{profile_data['target_role']}".
+Strict Rules:
+- If the role is related to AI, Machine Learning, Agentic AI, AI/ML, or GenAI (including abbreviations like "Ai/MI" or "Agentic Ai"), the stack MUST prioritize core AI/ML/Agentic technologies (e.g. Python, PyTorch, LangChain, TensorFlow, Hugging Face, Vector Databases, LlamaIndex, OpenAI API, NumPy, Pandas). Do NOT list generic web development stacks like Go, Gin, Node.js, PHP, or Kafka unless explicitly relevant.
+- Return ONLY a JSON list of strings. Do not include conversational text or markdown code fences.
 """
                 res = await generate_content_with_routing(prompt=role_prompt, response_mime_type="application/json", timeout=10.0)
                 role_skills = json.loads(res.strip())
@@ -383,24 +385,38 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
                 "ai_synthesis": f"Target role skill coverage for {profile_data['target_role']} is {coverage_pct}%."
             }
 
-        # Enrich prerequisites and force verified skills to completed status
+        # Enrich prerequisites and force verified skills to completed status or blocked if prereqs unmet
         enriched_roadmap = []
         verified_skills_lower = {s.lower() for s in profile_data["verified_skills"]}
-        for node in data.get("learning_roadmap", []):
+        
+        # First pass to compute completed nodes
+        raw_nodes = data.get("learning_roadmap", [])
+        for node in raw_nodes:
             node_copy = dict(node)
             raw_prereqs = node_copy.get("prerequisites", [])
             enriched_prereqs = []
+            has_unmet_prereq = False
             for p in raw_prereqs:
-                p_name = p.get("name") if isinstance(p, dict) else p
+                p_name = p.get("name") if isinstance(p, dict) else str(p)
                 met = p_name.lower() in verified_skills_lower
+                if not met:
+                    has_unmet_prereq = True
                 enriched_prereqs.append({
                     "name": p_name,
                     "met": met
                 })
             node_copy["prerequisites"] = enriched_prereqs
             node_name = node_copy.get("name", "")
+            
             if node_name.lower() in verified_skills_lower:
                 node_copy["status"] = "completed"
+            elif has_unmet_prereq:
+                node_copy["status"] = "blocked"
+            else:
+                # Keep existing focus or recommended status
+                current_status = str(node_copy.get("status", "recommended")).lower()
+                node_copy["status"] = current_status if current_status in ["focus", "recommended"] else "recommended"
+                
             enriched_roadmap.append(node_copy)
 
         return {
@@ -417,5 +433,210 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
             "recommendations": data.get("recommendations", []),
             "ai_synthesis": data.get("ai_synthesis")
         }
+
+    async def generate_dashboard_recommendation(
+        self, user_id: int, db: AsyncSession, force_refresh: bool = False
+    ) -> Dict[str, Any]:
+        import hashlib
+
+        # 1. Fetch Profile & target role
+        res_prof = await db.execute(select(Profile).filter(Profile.user_id == user_id))
+        profile = res_prof.scalars().first()
+        target_role = profile.target_role if profile else None
+
+        # 2. Fetch Latest Resume & ATS Score
+        res_resumes = await db.execute(
+            select(Resume)
+            .filter(Resume.user_id == user_id)
+            .order_by(Resume.created_at.desc())
+        )
+        resumes = list(res_resumes.scalars().all())
+        latest_resume = resumes[0] if resumes else None
+
+        ats_score = None
+        ats_gaps = []
+        if latest_resume and target_role and latest_resume.ats_analysis:
+            role_key = target_role.strip().lower()
+            analysis = latest_resume.ats_analysis.get(role_key)
+            if not analysis:
+                analyses = list(latest_resume.ats_analysis.values())
+                if analyses:
+                    analysis = analyses[0]
+            if analysis and isinstance(analysis, dict):
+                ats_score = analysis.get("overall_ats_score")
+                ats_gaps = [m.get("keyword") for m in analysis.get("missing_keywords", []) if m.get("keyword")]
+
+        # 3. Interview Performance
+        res_interviews = await db.execute(
+            select(InterviewSession)
+            .filter(InterviewSession.user_id == user_id)
+            .options(selectinload(InterviewSession.feedbacks))
+        )
+        interviews = list(res_interviews.scalars().all())
+        completed_interviews = [i for i in interviews if i.is_completed]
+        
+        avg_interview_score = 0.0
+        scores = []
+        for i in completed_interviews:
+            s_score = 0.0
+            if i.feedback and isinstance(i.feedback, dict):
+                s_score = float(i.feedback.get("overall_score", 0.0))
+            elif i.feedbacks:
+                s_score = float(i.feedbacks[0].overall_score)
+            if s_score > 0:
+                scores.append(s_score)
+        if scores:
+            avg_interview_score = round(sum(scores) / len(scores), 1)
+
+        # 4. Applications Count
+        res_apps = await db.execute(select(Application).filter(Application.user_id == user_id))
+        apps = list(res_apps.scalars().all())
+        active_apps_count = len(apps)
+
+        # Calculate state hash to prevent duplicate LLM calls
+        state_str = f"{target_role}:{len(resumes)}:{len(completed_interviews)}:{active_apps_count}:{ats_score or 0}"
+        state_hash = hashlib.md5(state_str.encode("utf-8")).hexdigest()
+
+        # Check preferences cache
+        if profile and profile.preferences and not force_refresh:
+            cached_data = profile.preferences.get("dashboard_recommendation_cache")
+            if isinstance(cached_data, dict) and cached_data.get("state_hash") == state_hash:
+                rec = cached_data.get("recommendation")
+                if rec and isinstance(rec, dict) and "title" in rec:
+                    logger.info("Serving dashboard recommendation from cache.")
+                    return rec
+
+        # Build career snapshot for LLM
+        career_snapshot = {
+            "has_resume": latest_resume is not None,
+            "resume_file_name": latest_resume.file_name if latest_resume else None,
+            "target_role": target_role,
+            "ats_score": ats_score,
+            "ats_gaps": ats_gaps,
+            "interview_sessions_count": len(completed_interviews),
+            "average_interview_score": avg_interview_score,
+            "active_applications_count": active_apps_count,
+            "skills": [s.title() for s in (profile.skills_json.get("skills", []) if profile and profile.skills_json else [])]
+        }
+
+        # Safe programmatic fallbacks if API routing fails or if there is not enough data
+        fallback_rec = {
+            "title": "Upload Your Resume",
+            "explanation": "Upload your latest resume to establish a career intelligence baseline.",
+            "supporting_reasons": [
+                "No resume has been parsed in the system yet.",
+                "ATS alignment scoring is currently locked."
+            ],
+            "expected_benefit": "Unlocks ATS score mapping, missing keyword gaps, and practice roadmaps.",
+            "route": "/resume"
+        }
+
+        if not latest_resume:
+            pass # Keep upload resume fallback
+        elif not target_role:
+            fallback_rec = {
+                "title": "Configure Target Role",
+                "explanation": "Select your target career path to map profile compatibility.",
+                "supporting_reasons": [
+                    "Resume is parsed, but target role is unconfigured.",
+                    "ATS requirements cannot be synthesized without a target role."
+                ],
+                "expected_benefit": "Activates custom keyword scanning and skill roadmaps.",
+                "route": "/resume"
+            }
+        elif len(completed_interviews) == 0:
+            fallback_rec = {
+                "title": "Complete First Mock Interview",
+                "explanation": "Trigger an AI mock session to evaluate technical response pacing and clarity.",
+                "supporting_reasons": [
+                    f"Profile is analyzed for {target_role}, but interview readiness is currently --/100.",
+                    "Practicing technical responses provides immediate confidence and filler-word metrics."
+                ],
+                "expected_benefit": "Unlocks interview score trend metrics on the dashboard.",
+                "route": "/interviews"
+            }
+        elif ats_gaps:
+            fallback_rec = {
+                "title": "Bridge Priority Skill Gaps",
+                "explanation": f"Acquire missing capabilities identified for {target_role}.",
+                "supporting_reasons": [
+                    f"ATS scan identified {len(ats_gaps)} missing keywords in your profile.",
+                    f"Key missing skills include: {', '.join(ats_gaps[:2])}."
+                ],
+                "expected_benefit": "Increases ATS score and improves application match alignment.",
+                "route": "/skills"
+            }
+        else:
+            fallback_rec = {
+                "title": "Consult A.C.E. Career Agent",
+                "explanation": "Explore custom market trends, company insights, and targeted strategies with A.C.E.",
+                "supporting_reasons": [
+                    f"Your profiles shows alignment with {target_role}.",
+                    "A.C.E. agent can help identify companies matching your tech stack."
+                ],
+                "expected_benefit": "Enables personalized company outreach plans.",
+                "route": "/career"
+            }
+
+        prompt = (
+            "You are an expert career intelligence engine named A.C.E. (Autonomous Career Engine).\n"
+            "Based strictly on the candidate's career data snapshot below, generate a high-priority, data-grounded next step recommendation.\n\n"
+            f"Candidate Data Snapshot:\n{json.dumps(career_snapshot, indent=2)}\n\n"
+            "Rules:\n"
+            "1. Grounding: Do not invent any achievements, scores, completed interviews, skills, or applications. If the candidate has 0 applications, do not say 'review your 5 active applications'.\n"
+            "2. Missing Data: If candidate has no target role configured or no resume uploaded, identify this missing data explicitly. Recommend setting a target role or uploading a resume.\n"
+            "3. Action Route: Provide the exact frontend destination route that maps to the action. It MUST be one of:\n"
+            "   - '/resume' (if they need to upload a resume or set their target role)\n"
+            "   - '/skills' (if they have skill gaps to learn/review)\n"
+            "   - '/interviews' (if they need to complete mock sessions or improve their interview score)\n"
+            "   - '/applications' (if they need to track/apply for jobs)\n"
+            "   - '/career' (if they need to explore options or consult the A.C.E. Agent)\n"
+            "4. Return ONLY a valid JSON object matching the JSON Schema below. No other text, no markdown block formatting (like ```json), just raw JSON.\n\n"
+            "JSON Schema:\n"
+            "{\n"
+            "  \"title\": \"The single highest-priority next action title (max 60 chars)\",\n"
+            "  \"explanation\": \"A concise explanation of why this is the best current step (max 150 chars)\",\n"
+            "  \"supporting_reasons\": [\"2-3 concrete reasons based strictly on the snapshot data\"],\n"
+            "  \"expected_benefit\": \"The expected career benefit or unlocked metric (max 100 chars)\",\n"
+            "  \"route\": \"/resume or /skills or /interviews or /applications or /career\"\n"
+            "}"
+        )
+
+        try:
+            res_text = await generate_content_with_routing(prompt=prompt, response_mime_type="application/json")
+            cleaned_json = res_text.strip()
+            if cleaned_json.startswith("```"):
+                lines = cleaned_json.splitlines()
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                cleaned_json = "\n".join(lines).strip()
+
+            rec_data = json.loads(cleaned_json)
+            if isinstance(rec_data, dict) and "title" in rec_data and "route" in rec_data:
+                # Save to cache
+                if profile:
+                    profile.preferences = dict(profile.preferences)
+                    profile.preferences["dashboard_recommendation_cache"] = {
+                        "state_hash": state_hash,
+                        "recommendation": rec_data
+                    }
+                    db.add(profile)
+                    await db.commit()
+                return rec_data
+        except Exception as e:
+            logger.error(f"Failed to generate dynamic recommendation via LLM: {e}")
+
+        # Fallback to safe computed recommendation
+        if profile:
+            profile.preferences = dict(profile.preferences)
+            profile.preferences["dashboard_recommendation_cache"] = {
+                "state_hash": state_hash,
+                "recommendation": fallback_rec
+            }
+            db.add(profile)
+            await db.commit()
+        return fallback_rec
 
 career_intelligence_service = CareerIntelligenceService()

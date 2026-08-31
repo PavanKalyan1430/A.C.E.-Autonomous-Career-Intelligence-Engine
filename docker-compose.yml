@@ -14,21 +14,21 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: ace_backend
-    restart: always
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/ace
-      - SECRET_KEY=YOUR_SECRET_KEY_HERE
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - TAVILY_API_KEY=${TAVILY_API_KEY}
-    depends_on:
-      - db
+#  backend:
+#    build:
+#      context: ./backend
+#      dockerfile: Dockerfile
+#    container_name: ace_backend
+#    restart: always
+#    ports:
+#      - "8000:8000"
+#    environment:
+#      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/ace
+#      - SECRET_KEY=YOUR_SECRET_KEY_HERE
+#      - GEMINI_API_KEY=${GEMINI_API_KEY}
+#      - TAVILY_API_KEY=${TAVILY_API_KEY}
+#    depends_on:
+#      - db
 
 volumes:
   pgdata:

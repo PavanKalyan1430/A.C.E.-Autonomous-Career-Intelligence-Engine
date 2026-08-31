@@ -101,7 +101,11 @@ export default function AnalyticsPage() {
       {/* Header and Filter */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-2">
         <div>
-          <h1 className="text-3xl font-bold text-[#3d3d3d] dark:text-white tracking-tight mb-1">Career Analytics</h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-1">
+            <span className="bg-gradient-to-r from-[#0D2B1D] via-[#10B981] via-[#336659] to-[#047857] bg-clip-text text-transparent">
+              Career Analytics
+            </span>
+          </h1>
           <p className="text-neutral-600 dark:text-neutral-400 font-medium">Understand how your career preparation is progressing.</p>
         </div>
         

@@ -60,7 +60,11 @@ export default function CompaniesPage() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-2">
         <div>
-          <h1 className="text-3xl font-bold text-[#3d3d3d] dark:text-white tracking-tight mb-1">Company Intelligence</h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-1">
+            <span className="bg-gradient-to-r from-[#0D2B1D] via-[#10B981] via-[#336659] to-[#047857] bg-clip-text text-transparent">
+              Company Intelligence
+            </span>
+          </h1>
           <p className="text-neutral-600 dark:text-neutral-400 font-medium">Research company tech stacks, hiring signals, and interview loops before you apply.</p>
         </div>
         <Button variant="secondary" icon={<Sparkles size={16} />} onClick={() => navigate('/career')}>

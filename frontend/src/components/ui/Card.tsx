@@ -26,7 +26,7 @@ export const Card: React.FC<CardProps> = ({
         'border border-neutral-200 dark:border-[#1E293B]',
         'rounded-xl shadow-card relative overflow-hidden',
         noPadding ? '' : paddings[padding],
-        hoverable ? 'transition-all duration-300 hover:shadow-elevated hover:border-brand-primary/30 hover:-translate-y-1 cursor-pointer' : '',
+        hoverable ? 'transition-all duration-200 ease-out hover:shadow-elevated hover:border-brand-primary/40 hover:-translate-y-0.5 cursor-pointer' : '',
         className,
       ].join(' ')}
       {...props}

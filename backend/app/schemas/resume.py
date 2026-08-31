@@ -77,6 +77,17 @@ class CareerRoadmapPlan(BaseModel):
     short_term_1_2_months: List[RoadmapPhaseItem] = Field(default_factory=list)
     long_term_3_6_months: List[RoadmapPhaseItem] = Field(default_factory=list)
 
+class EvidenceMatrixItem(BaseModel):
+    requirement: str
+    importance: str
+    source_type: str
+    evidence_strength: str
+    semantic_similarity: float
+    keyword_match: bool
+    explicit_resume_evidence: str
+    contextual_evidence: str
+    explanation: str
+
 class ATSAnalysisResponse(BaseModel):
     target_role: str
     overall_ats_score: Optional[int] = None
@@ -87,6 +98,7 @@ class ATSAnalysisResponse(BaseModel):
     matched_keywords: List[str]
     missing_keywords: List[KeywordIntelligenceItem]
     weak_keywords: List[str]
+    evidence_matrix: List[EvidenceMatrixItem] = Field(default_factory=list)
     actionable_improvements: List[ActionableImprovementItem]
     career_roadmap: CareerRoadmapPlan
     status: Optional[str] = Field("success", description="Analysis status: success or analysis_unavailable")

@@ -64,6 +64,11 @@ class GroqKeyRotator:
                 os.environ.get("GROQ_API_KEY_2", ""),
                 os.environ.get("GROQ_API_KEY_3", ""),
                 os.environ.get("GROQ_API_KEY_4", ""),
+                os.environ.get("GROQ_API_KEY_5", ""),
+                os.environ.get("GROQ_API_KEY_6", ""),
+                os.environ.get("GROQ_API_KEY_7", ""),
+                os.environ.get("GROQ_API_KEY_8", ""),
+                os.environ.get("GROQ_API_KEY_9", ""),
             ]
             seen = set()
             for k in env_candidates:
@@ -75,7 +80,7 @@ class GroqKeyRotator:
         if not keys:
             logger.warning(
                 "GroqKeyRotator: no Groq API keys found. "
-                "Set GROQ_API_KEY (and optionally GROQ_API_KEY_1..4) in .env."
+                "Set GROQ_API_KEY (and optionally GROQ_API_KEY_1..9) in .env."
             )
             self._cycle = iter([])   # empty, won't crash
             self._keys = []

@@ -252,7 +252,11 @@ export default function InterviewsPage() {
       {appState === 'setup' && (
         <div className="space-y-6">
           <div>
-            <h1 className="text-3xl font-heading font-bold text-[#3d3d3d] dark:text-white tracking-tight mb-1">Mock Interview Studio</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-1">
+              <span className="bg-gradient-to-r from-[#0D2B1D] via-[#10B981] via-[#336659] to-[#047857] bg-clip-text text-transparent">
+                Mock Interview Studio
+              </span>
+            </h1>
             <p className="text-neutral-600 dark:text-neutral-400 font-medium">Practice for your next technical round with ACE's Whisper-Whisper loop.</p>
           </div>
 

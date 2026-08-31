@@ -65,11 +65,15 @@ class ATSAnalyzerService:
         # ─── 1. TARGET REQUIREMENT EXTRACTION (JD / Inference Grounded) ───
         requirements_prompt = f"""
 Identify the standard required technical skills, core keywords, and standard expectations for the role: "{target_role}".
+Strict Rules:
+- If the role is related to AI, Machine Learning, Agentic AI, AI/ML, or GenAI (including abbreviations like "Ai/MI" or "Agentic Ai"), the requirements MUST prioritize core AI/ML/Agentic technologies (e.g. Python, PyTorch, LangChain, TensorFlow, Hugging Face, Vector Databases, LlamaIndex, OpenAI API, NumPy, Pandas). Do NOT list generic web development stacks like Go, Gin, Node.js, PHP, or Kafka unless explicitly relevant.
 """
         if jd_text:
             requirements_prompt = f"""
 Identify the required technical skills, core keywords, and expectations for the role: "{target_role}" based on the following Job Description:
 {jd_text}
+Strict Rules:
+- If the role is related to AI, Machine Learning, Agentic AI, AI/ML, or GenAI (including abbreviations like "Ai/MI" or "Agentic Ai"), the requirements MUST prioritize core AI/ML/Agentic technologies (e.g. Python, PyTorch, LangChain, TensorFlow, Hugging Face, Vector Databases, LlamaIndex, OpenAI API, NumPy, Pandas). Do NOT list generic web development stacks like Go, Gin, Node.js, PHP, or Kafka unless explicitly relevant.
 """
         requirements_prompt += """
 Return ONLY a valid JSON object matching this schema:
@@ -704,10 +708,9 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
         
         raw_improvements = eval_data.get("actionable_improvements", [])
         filtered_improvements = []
-        for imp in raw_improvements:
-            problem = imp.get("gap", imp.get("problem", ""))
-            # If the improvement corresponds to a valid detected gap, allow it
-            if any(gap.lower() in problem.lower() for gap in valid_gaps):
+        if valid_gaps:
+            for imp in raw_improvements:
+                problem = imp.get("gap", imp.get("problem", ""))
                 filtered_improvements.append({
                     "problem": problem,
                     "evidence": imp.get("evidence", "Missing explicit details"),
@@ -718,14 +721,13 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
         
         raw_roadmap = eval_data.get("career_roadmap", {"immediate_1_2_weeks": [], "short_term_1_2_months": [], "long_term_3_6_months": []})
         filtered_roadmap = {"immediate_1_2_weeks": [], "short_term_1_2_months": [], "long_term_3_6_months": []}
-        for phase in ["immediate_1_2_weeks", "short_term_1_2_months", "long_term_3_6_months"]:
-            for item in raw_roadmap.get(phase, []):
-                why = item.get("why_recommended", "")
-                if any(gap.lower() in why.lower() for gap in valid_gaps):
+        if valid_gaps:
+            for phase in ["immediate_1_2_weeks", "short_term_1_2_months", "long_term_3_6_months"]:
+                for item in raw_roadmap.get(phase, []):
                     filtered_roadmap[phase].append({
                         "title": item.get("title", ""),
                         "action_item": item.get("action_item", ""),
-                        "why_recommended": why,
+                        "why_recommended": item.get("why_recommended", ""),
                         "priority": item.get("priority", "medium")
                     })
 

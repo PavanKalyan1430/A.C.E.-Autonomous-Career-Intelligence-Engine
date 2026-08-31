@@ -14,6 +14,10 @@
   --text-primary:      #3d3d3d;      /* Darkest shade (#3d3d3d) for text */
   --text-secondary:    #4E6243;      /* Asparagus */
   --text-muted:        #6B8F71;      /* Fern */
+
+  --neutral-400:       #4E6243;      /* Asparagus — medium green for subtle labels */
+  --neutral-500:       #18291E;      /* Dark Forest — dark forest green for muted text */
+  --neutral-600:       #18291E;      /* Dark Forest */
 }
 
 /* ── DARK MODE (Deep Jungle) ────────────────────────────────── */
@@ -28,6 +32,10 @@
   --text-primary:      #ffffff;
   --text-secondary:    #AEC3B0;      /* Sage */
   --text-muted:        #6B8F71;      /* Fern */
+
+  --neutral-400:       #AEC3B0;      /* Sage for dark mode borders/icons */
+  --neutral-500:       #AEC3B0;      /* Sage / Light green text for dark background */
+  --neutral-600:       #6B8F71;      /* Fern */
 }
 
 /* ── BASE ───────────────────────────────────────────────────── */
@@ -56,7 +64,7 @@ h1, h2, h3, .font-heading {
 
 /* ── FOCUS ──────────────────────────────────────────────────── */
 :focus-visible {
-  outline: 2px solid #336659;
+  outline: 2px solid #234F45;
   outline-offset: 2px;
   border-radius: 4px;
 }

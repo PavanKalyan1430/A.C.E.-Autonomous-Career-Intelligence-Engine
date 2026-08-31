@@ -19,9 +19,11 @@ from app.schemas.analytics import (
     DashboardMetricsResponse, KPIOverview, InterviewAnalyticsSection,
     CommunicationAnalyticsSection, SkillAnalyticsSection, CompanyAnalyticsSection,
     SkillProgressItem, JobMatchItem, AIInsightItem, RecommendationItem, ActivityItem,
-    ScoreTrendPoint, QuestionPerformanceItem, AIInsightsRequest, AIInsightsResponse
+    ScoreTrendPoint, QuestionPerformanceItem, AIInsightsRequest, AIInsightsResponse,
+    DynamicRecommendation
 )
 from app.services.nlp_service import production_nlp_service
+from app.services.career_intelligence import career_intelligence_service
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,7 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 @router.get("/dashboard", response_model=DashboardMetricsResponse)
 async def get_dashboard_metrics(
+    force_refresh: bool = False,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -339,12 +342,22 @@ async def get_dashboard_metrics(
         {"month": "Month 1", "applications": active_applications_count, "interviews": completed_sessions_count}
     ]
 
-    # Calculate overall Career Score
+    # Calculate overall Career Score from actual persisted ATS analysis or interview history
     career_score_calc = 0
-    if scores_list:
+    if latest_resume and latest_resume.ats_analysis:
+        target_role = profile.target_role if profile else None
+        role_key = target_role.strip().lower() if target_role else None
+        analysis = None
+        if role_key and role_key in latest_resume.ats_analysis:
+            analysis = latest_resume.ats_analysis[role_key]
+        else:
+            analyses = list(latest_resume.ats_analysis.values())
+            if analyses:
+                analysis = analyses[0]
+        if analysis and isinstance(analysis, dict):
+            career_score_calc = analysis.get("overall_ats_score") or 0
+    elif scores_list:
         career_score_calc = int(avg_score)
-    elif verified_skills:
-        career_score_calc = int(min((len(verified_skills) / 7.0) * 100, 100))
 
     analyzed_apps = [app for app in user_applications if app.analysis and isinstance(app.analysis, dict) and "match_percentage" in app.analysis]
     real_match_avg = int(sum(app.analysis["match_percentage"] for app in analyzed_apps) / len(analyzed_apps)) if analyzed_apps else 0
@@ -391,6 +404,11 @@ async def get_dashboard_metrics(
         top_job_matches=top_job_matches
     )
 
+    dynamic_rec_dict = await career_intelligence_service.generate_dashboard_recommendation(
+        current_user.id, db, force_refresh=force_refresh
+    )
+    dynamic_rec = DynamicRecommendation(**dynamic_rec_dict) if dynamic_rec_dict else None
+
     return DashboardMetricsResponse(
         overview=overview_kpi,
         funnel=status_counts,
@@ -402,6 +420,7 @@ async def get_dashboard_metrics(
         company_analytics=company_sec,
         insights=insights,
         recommendations=recommendations,
+        dynamic_recommendation=dynamic_rec,
         recent_activity=recent_activity,
         activity_timeline=activity_timeline
     )

@@ -2,8 +2,9 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
-import { analyticsApi, resumeApi } from '@/api'
+import { analyticsApi, resumeApi, authApi } from '@/api'
 import { formatApiError } from '@/utils/error'
+import { getScoreVisuals } from '@/utils/scoreTheme'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -34,7 +35,7 @@ export default function DashboardPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { user } = useAuthStore()
-  
+
   // Redirect to Resume page to trigger upload flow
   const handleTriggerUpload = () => {
     console.log('[Diagnostic] "Update Resume" action triggered from Dashboard. Redirecting to /resume with triggerUpload state.');
@@ -69,9 +70,35 @@ export default function DashboardPage() {
     retry: false
   })
 
+  // 3. Fetch Profile for target role
+  const { data: userProfile, isLoading: isProfileLoading } = useQuery({
+    queryKey: ['userProfile'],
+    queryKeyHashFn: () => 'userProfile',
+    queryFn: async () => {
+      const res = await authApi.getProfile()
+      return res.data
+    },
+    retry: false
+  })
+
+  const targetRole = userProfile?.target_role || ''
+
+  // 4. Fetch ATS analysis dynamically to align career score
+  const { data: atsAnalysis, isLoading: isAtsLoading, isFetching: isAtsFetching } = useQuery({
+    queryKey: ['atsAnalysis', targetRole],
+    queryKeyHashFn: () => `atsAnalysis-${targetRole}`,
+    queryFn: async () => {
+      if (!targetRole) return null
+      const res = await resumeApi.getAtsAnalysis(targetRole)
+      return res.data
+    },
+    enabled: !!resume && !!targetRole,
+    retry: false
+  })
+
   // Derived user details or defaults
-  const userName = user?.profile?.full_name || (user?.email ? user.email.split('@')[0] : 'Candidate')
-  const displayGreeting = `Greetings ${userName.charAt(0).toUpperCase() + userName.slice(1)}`
+  const userName = userProfile?.full_name || user?.profile?.full_name || (user?.email ? user.email.split('@')[0] : 'Candidate')
+  const displayGreeting = `Greetings ${userName.charAt(0).toUpperCase() + userName.slice(1)} :)`
 
   // Calculate live values based on backend API schema responses
   const overview = analytics?.overview
@@ -85,13 +112,18 @@ export default function DashboardPage() {
   const missingSkills = skillAnalytics?.missing_skills || []
   const weakAreas = analytics?.interview_analytics?.weak_areas || []
 
-  const careerScore = overview?.career_score ?? 0
+  // Check analysis running status
+  const isAtsRunning = isAtsLoading || (isAtsFetching && !atsAnalysis)
+  const hasAtsAnalysis = atsAnalysis && atsAnalysis.overall_ats_score !== null && atsAnalysis.status !== 'analysis_unavailable'
+
+  // Keep dashboard and resume score strictly synchronized
+  const careerScore = hasAtsAnalysis ? atsAnalysis.overall_ats_score : (overview?.career_score > 0 ? overview.career_score : 0)
   const jobMatchPercentage = overview?.job_match_percentage ?? 0
   const activeApplications = overview?.active_applications ?? 0
   const interviewReadiness = overview?.interview_score ?? 0
   const totalSessions = overview?.completed_interviews ?? 0
 
-  const isLoading = isAnalyticsLoading || isResumeLoading
+  const isLoading = isAnalyticsLoading || isResumeLoading || isProfileLoading
 
   // ─── ERROR STATE (API Failure handling) ──────────────────────────────────
   if (isAnalyticsError) {
@@ -178,7 +210,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <Card 
+        <Card
           className="border-2 border-dashed p-10 text-center transition-all cursor-pointer hover:border-brand-primary/60 dark:hover:border-brand-primary/60 border-neutral-200 dark:border-[#4E6243]"
           onClick={handleTriggerUpload}
         >
@@ -190,10 +222,10 @@ export default function DashboardPage() {
             <p className="text-xs text-neutral-400 dark:text-neutral-500 mb-6">
               Supports PDF, Word (DOCX) or plain TXT up to 10MB
             </p>
-            
-            <Button 
+
+            <Button
               icon={<UploadCloud size={16} />}
-              onClick={(e) => {
+              onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
                 handleTriggerUpload();
               }}
@@ -252,12 +284,19 @@ export default function DashboardPage() {
   // ─── POPULATED STATE ─────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-6 animate-fade-in text-neutral-700 dark:text-neutral-300">
-      
+
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-2">
         <div>
-          <h1 className="text-3xl font-bold text-[#3d3d3d] dark:text-white tracking-tight mb-1">{displayGreeting}</h1>
-          <p className="text-neutral-600 dark:text-neutral-400 font-medium">Here is your career intelligence overview.</p>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mb-1 font-sans">
+            <span className="bg-gradient-to-r from-[#0D2B1D] via-[#10B981] via-[#336659] to-[#047857] bg-clip-text text-transparent drop-shadow-2xs">
+              Greetings {userName.charAt(0).toUpperCase() + userName.slice(1)}
+            </span>
+            <span className="bg-gradient-to-r from-[#10B981] to-[#336659] bg-clip-text text-transparent font-extrabold ml-1.5 inline-block font-mono text-3xl hover:scale-110 transition-transform cursor-default">
+              :)
+            </span>
+          </h1>
+          <p className="text-xs md:text-sm text-[#334155] dark:text-neutral-400 font-semibold">Here is your career intelligence overview.</p>
         </div>
         <div className="flex gap-3">
           <Button variant="secondary" icon={<UploadCloud size={16} />} onClick={handleTriggerUpload}>
@@ -271,74 +310,100 @@ export default function DashboardPage() {
 
       {/* KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        
+
         {/* Career Score */}
-        <Card hoverable className="relative group border-t-4 border-t-brand-primary">
-          <div className="absolute top-5 right-5 text-brand-primary bg-brand-light dark:bg-brand-primary/10 p-2 rounded-lg group-hover:bg-brand-primary group-hover:text-white transition-colors duration-300">
+        <Card hoverable className={`relative group border-t-4 ${hasAtsAnalysis ? getScoreVisuals(careerScore).border : 'border-t-neutral-300 dark:border-t-neutral-700'}`} onClick={() => navigate('/resume')}>
+          <div className={`absolute top-5 right-5 p-2 rounded-lg transition-colors duration-300 ${hasAtsAnalysis
+              ? `${getScoreVisuals(careerScore).bg} ${getScoreVisuals(careerScore).text} group-hover:bg-brand-primary group-hover:text-white`
+              : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400'
+            }`}>
             <Award size={20} />
           </div>
           <h3 className="text-2xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Career Score</h3>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-3xl font-bold text-[#3d3d3d] dark:text-white tracking-tight">
-              {careerScore > 0 ? careerScore : '--'}
-            </span>
-            <span className="text-sm font-medium text-neutral-400 dark:text-neutral-500">/ 100</span>
-          </div>
-          <div className="mt-3 text-2xs font-medium text-neutral-500 flex items-center gap-1">
-            {careerScore > 0 ? (
-              <>
-                <TrendingUp size={14} className="text-success" />
-                <span className="text-success font-semibold">Diagnostics updated</span>
-              </>
-            ) : (
-              <span>No diagnostics yet</span>
-            )}
-          </div>
+          {isAtsRunning ? (
+            <div className="flex items-center gap-2 py-1">
+              <div className="w-4 h-4 border-2 border-brand-primary border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-xs text-neutral-500 font-semibold">Running analysis...</span>
+            </div>
+          ) : hasAtsAnalysis ? (
+            <>
+              <div className="flex items-baseline gap-1.5">
+                <span className={`text-3xl font-bold tracking-tight ${getScoreVisuals(careerScore).text}`}>
+                  {careerScore}
+                </span>
+                <span className="text-sm font-medium text-neutral-400 dark:text-neutral-500">/ 100</span>
+              </div>
+              <div className="mt-3 text-2xs font-medium flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${getScoreVisuals(careerScore).indicator}`} />
+                <span className={`${getScoreVisuals(careerScore).text} font-semibold`}>Diagnostics synced</span>
+              </div>
+            </>
+          ) : (
+            <div className="text-2xs text-neutral-400 dark:text-neutral-500 leading-normal py-1">
+              Complete your first analysis to unlock this.
+            </div>
+          )}
         </Card>
 
         {/* Job Match */}
-        <Card hoverable className="relative group border-t-4 border-t-[#0891B2]">
-          <div className="absolute top-5 right-5 text-[#0891B2] bg-brand-cyan10 p-2 rounded-lg group-hover:bg-[#0891B2] group-hover:text-white transition-colors duration-300">
+        <Card hoverable className={`relative group border-t-4 ${jobMatchPercentage > 0 ? getScoreVisuals(jobMatchPercentage).border : 'border-t-neutral-300 dark:border-t-neutral-700'}`} onClick={() => navigate('/companies')}>
+          <div className={`absolute top-5 right-5 p-2 rounded-lg transition-colors duration-300 ${jobMatchPercentage > 0
+              ? `${getScoreVisuals(jobMatchPercentage).bg} ${getScoreVisuals(jobMatchPercentage).text} group-hover:bg-brand-primary group-hover:text-white`
+              : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400'
+            }`}>
             <Target size={20} />
           </div>
           <h3 className="text-2xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Job Match</h3>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-3xl font-bold text-[#3d3d3d] dark:text-white tracking-tight">
-              {jobMatchPercentage > 0 ? `${jobMatchPercentage}%` : '--'}
-            </span>
-          </div>
-          <div className="mt-3 text-2xs font-medium text-neutral-600 dark:text-neutral-400">
-            {jobMatchPercentage > 0 ? 'Match across tracked applications' : 'No active application matches yet'}
-          </div>
+          {jobMatchPercentage > 0 ? (
+            <>
+              <div className="flex items-baseline gap-1.5">
+                <span className={`text-3xl font-bold tracking-tight ${getScoreVisuals(jobMatchPercentage).text}`}>
+                  {jobMatchPercentage}%
+                </span>
+              </div>
+              <div className="mt-3 text-2xs font-medium text-neutral-600 dark:text-neutral-400">
+                Match across tracked applications
+              </div>
+            </>
+          ) : (
+            <div className="text-2xs text-neutral-400 dark:text-neutral-500 leading-normal py-1">
+              No matches yet. Complete your first analysis to unlock this.
+            </div>
+          )}
         </Card>
 
         {/* Interview Score */}
-        <Card hoverable className="relative group border-t-4 border-t-purple-500">
-          <div className="absolute top-5 right-5 text-purple-600 bg-purple-50 dark:bg-purple-950/20 p-2 rounded-lg group-hover:bg-purple-500 group-hover:text-white transition-colors duration-300">
+        <Card hoverable className={`relative group border-t-4 ${totalSessions > 0 ? getScoreVisuals(interviewReadiness).border : 'border-t-neutral-300 dark:border-t-neutral-700'}`} onClick={() => navigate('/interviews')}>
+          <div className={`absolute top-5 right-5 p-2 rounded-lg transition-colors duration-300 ${totalSessions > 0
+              ? `${getScoreVisuals(interviewReadiness).bg} ${getScoreVisuals(interviewReadiness).text} group-hover:bg-brand-primary group-hover:text-white`
+              : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400'
+            }`}>
             <MessageSquare size={20} />
           </div>
           <h3 className="text-2xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Interview Score</h3>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-3xl font-bold text-[#3d3d3d] dark:text-white tracking-tight">
-              {totalSessions > 0 ? interviewReadiness : '--'}
-            </span>
-            <span className="text-sm font-medium text-neutral-400 dark:text-neutral-500">/ 100</span>
-          </div>
-          <div className="mt-3 text-2xs font-medium text-neutral-500 flex items-center gap-1">
-            {totalSessions > 0 ? (
-              <>
-                <TrendingUp size={14} className="text-success" />
-                <span className="text-success font-semibold">{totalSessions} mock sessions completed</span>
-              </>
-            ) : (
-              <span>No mock sessions completed yet</span>
-            )}
-          </div>
+          {totalSessions > 0 ? (
+            <>
+              <div className="flex items-baseline gap-1.5">
+                <span className={`text-3xl font-bold tracking-tight ${getScoreVisuals(interviewReadiness).text}`}>
+                  {interviewReadiness}
+                </span>
+                <span className="text-sm font-medium text-neutral-400 dark:text-neutral-500">/ 100</span>
+              </div>
+              <div className="mt-3 text-2xs font-medium flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${getScoreVisuals(interviewReadiness).indicator}`} />
+                <span className={`${getScoreVisuals(interviewReadiness).text} font-semibold`}>{totalSessions} sessions completed</span>
+              </div>
+            </>
+          ) : (
+            <div className="text-2xs text-neutral-400 dark:text-neutral-500 leading-normal py-1">
+              No sessions yet. Complete your first analysis to unlock this.
+            </div>
+          )}
         </Card>
 
         {/* Applications */}
-        <Card hoverable className="relative group border-t-4 border-t-orange-500">
-          <div className="absolute top-5 right-5 text-orange-600 bg-orange-50 dark:bg-orange-950/20 p-2 rounded-lg group-hover:bg-orange-500 group-hover:text-white transition-colors duration-300">
+        <Card hoverable className="relative group border-t-4 border-t-brand-primary" onClick={() => navigate('/applications')}>
+          <div className="absolute top-5 right-5 text-brand-primary bg-brand-light dark:bg-brand-primary/10 p-2 rounded-lg group-hover:bg-brand-primary group-hover:text-white transition-colors duration-300">
             <Briefcase size={20} />
           </div>
           <h3 className="text-2xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Applications</h3>
@@ -353,22 +418,22 @@ export default function DashboardPage() {
 
       {/* Middle Row (2:1 Grid) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        
+
         {/* ACE Intelligence Hero */}
-        <Card className="lg:col-span-2 relative overflow-hidden flex flex-col justify-between border-l-4 border-l-[#0891B2] bg-gradient-to-br from-white to-brand-sage/20 dark:from-[#18291E] dark:to-[#0D2B1D]">
+        <Card className="lg:col-span-2 relative overflow-hidden flex flex-col justify-between border-l-4 border-l-brand-primary bg-gradient-to-br from-white to-brand-sage/20 dark:from-[#18291E] dark:to-[#0D2B1D]">
           <div>
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-2">
-                <Sparkles size={20} className="text-[#0891B2] animate-pulse-dot" />
+                <Sparkles size={20} className="text-brand-primary animate-pulse-dot" />
                 <h2 className="text-lg font-bold text-[#3d3d3d] dark:text-white tracking-tight">ACE Intelligence</h2>
               </div>
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-cyan10 border border-brand-cyan/20">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-sage/40 border border-brand-primary/20">
                 <span className="ai-pulse"></span>
-                <span className="text-[10px] font-semibold text-[#0891B2] uppercase tracking-wide">Live Synthesis</span>
+                <span className="text-[10px] font-semibold text-brand-primary uppercase tracking-wide">Live Synthesis</span>
               </div>
             </div>
 
-            <h3 className="text-2xs font-bold text-[#0891B2] uppercase tracking-widest mb-2">Your Strongest Next Move</h3>
+            <h3 className="text-2xs font-bold text-brand-primary uppercase tracking-widest mb-2">Your Strongest Next Move</h3>
 
             {recommendationsList.length > 0 ? (
               <div className="mb-6">
@@ -381,8 +446,8 @@ export default function DashboardPage() {
                 Focus on acquiring <span className="text-brand-primary font-bold">{missingSkills.slice(0, 2).join(' & ')}</span> to expand your match score across target engineering positions.
               </p>
             ) : (
-              <p className="text-md font-bold text-[#3d3d3d] dark:text-white leading-relaxed max-w-2xl mb-6">
-                Complete a mock interview session or research target companies to unlock tailored career recommendations.
+              <p className="text-md font-bold text-[#3d3d3d] dark:text-white leading-relaxed max-w-2xl mb-6 font-semibold text-neutral-500">
+                Complete a mock interview session or upload a resume to unlock tailored career recommendations.
               </p>
             )}
 
@@ -446,7 +511,7 @@ export default function DashboardPage() {
 
       {/* Lower Row (Top Job Matches & Skill Progress) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        
+
         {/* Top Job Matches */}
         <Card>
           <div className="flex justify-between items-center mb-6">
@@ -459,8 +524,8 @@ export default function DashboardPage() {
           {jobMatches.length > 0 ? (
             <div className="space-y-1">
               {jobMatches.map((job: any, idx: number) => (
-                <div 
-                  key={idx} 
+                <div
+                  key={idx}
                   className="flex items-center justify-between p-3 -mx-3 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800/80 transition-all duration-200 group cursor-pointer"
                   onClick={() => navigate('/companies')}
                 >
@@ -474,9 +539,9 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <Badge variant="blue" className="font-bold border-brand-primary/20 bg-brand-light text-brand-primary">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${getScoreVisuals(job.match).bg} ${getScoreVisuals(job.match).text} ${getScoreVisuals(job.match).border}`}>
                       {job.match}% Match
-                    </Badge>
+                    </span>
                   </div>
                 </div>
               ))}
@@ -505,18 +570,17 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-neutral-700 dark:text-neutral-300">{item.skill}</span>
                       {item.badge && (
-                        <span className={`text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded border ${
-                          item.ai 
-                            ? 'bg-brand-cyan10 text-[#0891B2] border-brand-cyan/20' 
-                            : 'bg-brand-light text-brand-primary border-brand-primary/20'
-                        }`}>
+                        <span className={`text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded border ${item.ai
+                            ? 'bg-[#E3EFD3]/50 text-[#4E6243] border-[#AEC3B0]/30'
+                            : 'bg-brand-primary/10 text-brand-primary border-brand-primary/20'
+                          }`}>
                           {item.badge}
                         </span>
                       )}
                     </div>
                     <span className="font-bold text-neutral-500">{item.val}%</span>
                   </div>
-                  <ProgressBar value={item.val} variant={item.ai ? 'cyan' : 'blue'} />
+                  <ProgressBar value={item.val} variant="score" />
                 </div>
               ))}
             </div>
@@ -530,7 +594,7 @@ export default function DashboardPage() {
 
       {/* Bottom Row (Insights & Activity Timeline) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
-        
+
         {/* Career Insights */}
         <Card>
           <h2 className="text-base font-bold text-[#3d3d3d] dark:text-white mb-6">Career Insights</h2>

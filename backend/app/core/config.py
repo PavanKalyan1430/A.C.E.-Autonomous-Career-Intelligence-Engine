@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     GROQ_API_KEY_2: str = ""
     GROQ_API_KEY_3: str = ""
     GROQ_API_KEY_4: str = ""
+    GROQ_API_KEY_5: str = ""
+    GROQ_API_KEY_6: str = ""
+    GROQ_API_KEY_7: str = ""
+    GROQ_API_KEY_8: str = ""
+    GROQ_API_KEY_9: str = ""
     TAVILY_API_KEY: str = ""
 
     # Adzuna API keys
@@ -59,7 +64,7 @@ class Settings(BaseSettings):
     @property
     def groq_api_keys(self) -> list:
         """Return all configured Groq API keys as a deduplicated, ordered list.
-        GROQ_API_KEY always comes first, followed by keys 1-4.
+        GROQ_API_KEY always comes first, followed by keys 1-9.
         Empty strings are excluded automatically.
         """
         candidates = [
@@ -68,6 +73,11 @@ class Settings(BaseSettings):
             self.GROQ_API_KEY_2,
             self.GROQ_API_KEY_3,
             self.GROQ_API_KEY_4,
+            self.GROQ_API_KEY_5,
+            self.GROQ_API_KEY_6,
+            self.GROQ_API_KEY_7,
+            self.GROQ_API_KEY_8,
+            self.GROQ_API_KEY_9,
         ]
         seen = set()
         keys = []

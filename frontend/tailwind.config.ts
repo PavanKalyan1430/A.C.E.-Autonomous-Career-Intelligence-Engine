@@ -21,9 +21,9 @@ const config: Config = {
           100: '#f3efe8', // Warm cream
           200: '#e8e4db', // Subtle borders
           300: '#dcd9d9',
-          400: '#AEC3B0', // Sage (muted borders/icons)
-          500: '#6B8F71', // Fern (muted text)
-          600: '#4E6243', // Asparagus (secondary text)
+          400: 'var(--neutral-400)', // Sage/Asparagus dynamically
+          500: 'var(--neutral-500)', // Fern/Dark Forest dynamically
+          600: 'var(--neutral-600)', // Asparagus/Dark Forest dynamically
           700: '#3d3d3d', // Charcoal (primary text)
           800: '#18291E', // Dark Forest (dark mode surface)
           900: '#0D2B1D', // Deep Jungle (dark mode bg)

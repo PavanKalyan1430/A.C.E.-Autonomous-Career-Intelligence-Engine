@@ -88,6 +88,10 @@ class Job(Base):
     description: Mapped[str] = mapped_column(String, nullable=True)
     requirements: Mapped[list] = mapped_column(JSON, default=list)
     salary_range: Mapped[str] = mapped_column(String, nullable=True)
+    location: Mapped[str] = mapped_column(String, nullable=True, default="Remote")
+    experience: Mapped[str] = mapped_column(String, nullable=True, default="Intermediate")
+    job_type: Mapped[str] = mapped_column(String, nullable=True, default="Full-time")
+    remote_onsite: Mapped[str] = mapped_column(String, nullable=True, default="Remote")
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
     company: Mapped["Company"] = relationship("Company", back_populates="jobs")

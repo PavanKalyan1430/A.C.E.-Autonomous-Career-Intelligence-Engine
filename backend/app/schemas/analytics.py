@@ -73,6 +73,13 @@ class RecommendationItem(BaseModel):
     priority: str
     source_metric: str
 
+class DynamicRecommendation(BaseModel):
+    title: str
+    explanation: str
+    supporting_reasons: List[str]
+    expected_benefit: str
+    route: str
+
 class ActivityItem(BaseModel):
     desc: str
     time: str
@@ -89,6 +96,7 @@ class DashboardMetricsResponse(BaseModel):
     company_analytics: CompanyAnalyticsSection
     insights: List[AIInsightItem]
     recommendations: List[RecommendationItem]
+    dynamic_recommendation: Optional[DynamicRecommendation] = None
     recent_activity: List[ActivityItem]
     activity_timeline: List[Dict[str, Any]]
 

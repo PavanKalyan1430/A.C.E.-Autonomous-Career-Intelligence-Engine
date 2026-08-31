@@ -267,9 +267,11 @@ export default function SettingsPage() {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-neutral-200 dark:border-[#18291E]">
         <div>
-          <h1 className="text-3xl font-extrabold text-[#3d3d3d] dark:text-white tracking-tight flex items-center gap-3">
-            <Sliders className="text-brand-primary" size={28} />
-            Account & Settings
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-3">
+            <Sliders className="text-[#336659]" size={28} />
+            <span className="bg-gradient-to-r from-[#0D2B1D] via-[#10B981] via-[#336659] to-[#047857] bg-clip-text text-transparent">
+              Account & Settings
+            </span>
           </h1>
           <p className="text-sm text-neutral-600 dark:text-neutral-400 font-medium mt-1">
             Manage your personal profile, security credentials, AI routing preferences, and agent memories.
