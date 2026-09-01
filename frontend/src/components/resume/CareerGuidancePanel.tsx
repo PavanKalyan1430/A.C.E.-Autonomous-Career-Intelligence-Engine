@@ -8,6 +8,7 @@ interface MissingKeyword {
   keyword: string
   priority: string
   reason?: string
+  where_it_matters?: string
 }
 
 interface CareerGuidancePanelProps {
@@ -16,6 +17,10 @@ interface CareerGuidancePanelProps {
   learningRoadmap?: any[]
 }
 
+/**
+ * Pure Data-Driven AI Career Guidance Panel.
+ * ZERO hardcoded strings or invented percentage bullets.
+ */
 export const CareerGuidancePanel: React.FC<CareerGuidancePanelProps> = ({
   missingKeywords,
   targetRole,
@@ -24,7 +29,16 @@ export const CareerGuidancePanel: React.FC<CareerGuidancePanelProps> = ({
   const navigate = useNavigate()
   const topGap = missingKeywords.find((k) => k.priority?.toLowerCase() === 'high') ?? missingKeywords[0]
 
-  const topKeyword = topGap?.keyword || 'PyTorch'
+  // Collect real reasons from API only — no template strings
+  const realReasons: string[] = []
+  if (topGap) {
+    if (topGap.where_it_matters) realReasons.push(topGap.where_it_matters)
+    if (topGap.reason) realReasons.push(topGap.reason)
+    const roadmapMatch = learningRoadmap.find((n: any) =>
+      n.name?.toLowerCase().includes(topGap.keyword.toLowerCase())
+    )
+    if (roadmapMatch?.reason) realReasons.push(roadmapMatch.reason)
+  }
 
   return (
     <div className="bg-white dark:bg-[#0D1117] rounded-2xl border border-neutral-200 dark:border-[#1E293B] shadow-card p-5 h-full flex flex-col justify-between">
@@ -57,38 +71,34 @@ export const CareerGuidancePanel: React.FC<CareerGuidancePanelProps> = ({
               <div className="p-3.5 rounded-xl bg-brand-light/40 dark:bg-brand-primary/10 border border-brand-primary/20">
                 <div className="flex items-center justify-between gap-2 mb-1.5">
                   <h4 className="text-[14px] font-extrabold text-neutral-900 dark:text-white leading-tight">
-                    {topKeyword}
+                    {topGap.keyword}
                   </h4>
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary text-[9px] font-extrabold border border-brand-primary/20 uppercase">
-                    <Star size={9} fill="currentColor" /> HIGH
+                    <Star size={9} fill="currentColor" /> {topGap.priority?.toUpperCase() || 'HIGH'}
                   </span>
                 </div>
                 <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                  Missing evidence in your resume. This skill has high demand and strong weightage for your target role.
+                  Missing capability for {targetRole || 'target role'}.
                 </p>
               </div>
             </div>
 
-            {/* Why fix this next? bullets */}
-            <div className="mb-5">
-              <div className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-2.5">
-                Why fix this next?
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-start gap-2 text-[11px] text-neutral-600 dark:text-neutral-300">
-                  <CheckCircle size={13} className="text-brand-primary flex-shrink-0 mt-0.5" />
-                  <span>High demand in 62% of relevant job postings</span>
+            {/* Why fix this next? (Rendered ONLY if real API reasons exist) */}
+            {realReasons.length > 0 && (
+              <div className="mb-5">
+                <div className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-2.5">
+                  Why fix this next?
                 </div>
-                <div className="flex items-start gap-2 text-[11px] text-neutral-600 dark:text-neutral-300">
-                  <CheckCircle size={13} className="text-brand-primary flex-shrink-0 mt-0.5" />
-                  <span>Strong prerequisite for Advanced {targetRole || 'AI'} roles</span>
-                </div>
-                <div className="flex items-start gap-2 text-[11px] text-neutral-600 dark:text-neutral-300">
-                  <CheckCircle size={13} className="text-brand-primary flex-shrink-0 mt-0.5" />
-                  <span>Completing this can unlock 8–12 score points</span>
+                <div className="space-y-2">
+                  {realReasons.map((point, i) => (
+                    <div key={i} className="flex items-start gap-2 text-[11px] text-neutral-600 dark:text-neutral-300">
+                      <CheckCircle size={13} className="text-brand-primary flex-shrink-0 mt-0.5" />
+                      <span>{point}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>

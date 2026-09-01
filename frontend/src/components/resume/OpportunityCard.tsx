@@ -11,17 +11,14 @@ interface OpportunityCardProps {
 }
 
 const IMPACT_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string; pts: string }> = {
-  high:   { label: 'HIGH PRIORITY',   bg: 'bg-brand-primary/10 dark:bg-brand-primary/20', text: 'text-brand-primary',  dot: 'bg-brand-primary', pts: '+8–12 pts' },
-  medium: { label: 'MEDIUM PRIORITY', bg: 'bg-brand-ai/10 dark:bg-brand-ai/20',              text: 'text-brand-ai',       dot: 'bg-brand-ai',      pts: '+4–7 pts'  },
-  low:    { label: 'LOW PRIORITY',    bg: 'bg-neutral-100 dark:bg-neutral-800/40',            text: 'text-neutral-500',    dot: 'bg-neutral-400',   pts: '+2–4 pts'  },
+  high:   { label: 'HIGH PRIORITY',   bg: 'bg-brand-primary/10 dark:bg-brand-primary/20', text: 'text-brand-primary',  dot: 'bg-brand-primary', pts: 'High Impact' },
+  medium: { label: 'MEDIUM PRIORITY', bg: 'bg-brand-ai/10 dark:bg-brand-ai/20',              text: 'text-brand-ai',       dot: 'bg-brand-ai',      pts: 'Med Impact'  },
+  low:    { label: 'LOW PRIORITY',    bg: 'bg-neutral-100 dark:bg-neutral-800/40',            text: 'text-neutral-500',    dot: 'bg-neutral-400',   pts: 'Low Impact'  },
 }
 
 const ICON_SVGS = [
-  // Megaphone / Speaker icon
   <svg key="1" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#336659" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 11l18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 11-5.8-1.6"/></svg>,
-  // Target / Code icon
   <svg key="2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#336659" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
-  // Impact / Bar chart icon
   <svg key="3" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#336659" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>,
 ]
 
@@ -67,11 +64,11 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
       {/* Right: Potential Impact + Take Action button */}
       <div className="flex items-center gap-4 flex-shrink-0">
         <div className="text-right">
-          <div className="text-[13px] font-bold text-neutral-800 dark:text-white leading-tight">
+          <div className="text-[12px] font-bold text-neutral-800 dark:text-white leading-tight">
             {pts}
           </div>
           <div className="text-[9px] text-neutral-400 font-medium mt-0.5">
-            Potential Impact
+            Priority Impact
           </div>
         </div>
 

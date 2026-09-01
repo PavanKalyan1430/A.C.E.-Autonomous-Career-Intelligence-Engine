@@ -12,6 +12,10 @@ interface OpportunitiesSectionProps {
   learningRoadmap?: any[]
 }
 
+/**
+ * Pure Data-Driven Opportunities Section.
+ * ZERO hardcoded dummy cards. Items map strictly from API arrays.
+ */
 export const OpportunitiesSection: React.FC<OpportunitiesSectionProps> = ({
   actionableImprovements = [],
   missingKeywords = [],
@@ -20,29 +24,14 @@ export const OpportunitiesSection: React.FC<OpportunitiesSectionProps> = ({
 }) => {
   const navigate = useNavigate()
 
-  // Default sample improvements matching reference screenshot if API array is empty
+  // Derives items strictly from real API analysis arrays
   let itemsToDisplay = actionableImprovements
-  if (itemsToDisplay.length === 0) {
-    itemsToDisplay = [
-      {
-        problem: 'Add PyTorch Experience',
-        recommendation: `Required by 62% of ${targetRole || 'AI Engineer'} job postings in current market.`,
-        impact: 'high',
-        potentialPts: '+8–12 pts',
-      },
-      {
-        problem: 'Add TensorFlow Experience',
-        recommendation: 'Demonstrate practical usage through projects or coursework.',
-        impact: 'high',
-        potentialPts: '+6–10 pts',
-      },
-      {
-        problem: 'Quantify Project Impact',
-        recommendation: 'Add measurable outcomes, scale, and business impact to your projects.',
-        impact: 'medium',
-        potentialPts: '+4–7 pts',
-      },
-    ]
+  if (itemsToDisplay.length === 0 && missingKeywords.length > 0) {
+    itemsToDisplay = missingKeywords.map((kw: any) => ({
+      problem: `Add ${kw.keyword} Evidence`,
+      recommendation: kw.where_it_matters || `Missing requirement for ${targetRole || 'target role'} alignment.`,
+      impact: kw.priority || 'high',
+    }))
   }
 
   const top3 = itemsToDisplay.slice(0, 3)
@@ -62,31 +51,43 @@ export const OpportunitiesSection: React.FC<OpportunitiesSectionProps> = ({
             </p>
           </div>
 
-          <div className="space-y-3">
-            {top3.map((imp, i) => (
-              <OpportunityCard
-                key={i}
-                index={i}
-                problem={imp.problem || imp.gap}
-                recommendation={imp.recommendation}
-                impact={imp.impact || imp.importance}
-                whyItMatters={imp.why_it_matters}
-                potentialPts={imp.potentialPts}
-                onTakeAction={() => navigate('/skills')}
+          {top3.length === 0 ? (
+            <div className="py-6">
+              <EmptyState
+                icon={<Lightbulb size={16} />}
+                title="No improvement opportunities identified"
+                description="Your resume covers the key requirements for your target role."
+                compact
               />
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {top3.map((imp, i) => (
+                <OpportunityCard
+                  key={i}
+                  index={i}
+                  problem={imp.problem || imp.gap}
+                  recommendation={imp.recommendation}
+                  impact={imp.impact || imp.importance}
+                  whyItMatters={imp.why_it_matters}
+                  onTakeAction={() => navigate('/skills')}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="mt-4 pt-3 text-center border-t border-neutral-100 dark:border-neutral-800">
-          <button
-            onClick={() => navigate('/skills')}
-            className="inline-flex items-center gap-1 text-[12px] font-bold text-neutral-700 dark:text-neutral-300 hover:text-brand-primary transition-colors group"
-          >
-            View All Recommendations
-            <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
-          </button>
-        </div>
+        {itemsToDisplay.length > 0 && (
+          <div className="mt-4 pt-3 text-center border-t border-neutral-100 dark:border-neutral-800">
+            <button
+              onClick={() => navigate('/skills')}
+              className="inline-flex items-center gap-1 text-[12px] font-bold text-neutral-700 dark:text-neutral-300 hover:text-brand-primary transition-colors group"
+            >
+              View All Recommendations
+              <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* RIGHT: AI Career Guidance (1/3 width) */}
