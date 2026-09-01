@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
-import { ChevronDown, ChevronUp, ChevronRight, CheckCircle, PlusCircle, AlertCircle } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronRight, CheckCircle, PlusCircle, AlertCircle, Grid } from 'lucide-react'
 import { EmptyState } from './EmptyState'
-import { Grid } from 'lucide-react'
 
 interface EvidenceItem {
   requirement: string
@@ -19,17 +18,18 @@ interface EvidenceMatrixSectionProps {
   showLimit?: number
 }
 
+// Strict A.C.E. Green Semantic System (No Red, Orange, or Yellow)
 const STRENGTH_CONFIG: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  strong:  { label: 'Strong',  bg: 'bg-brand-primary/10',   text: 'text-brand-primary', border: 'border-brand-primary/20' },
-  partial: { label: 'Partial', bg: 'bg-brand-ai/10',         text: 'text-brand-ai',      border: 'border-brand-ai/20' },
-  weak:    { label: 'Weak',    bg: 'bg-neutral-100 dark:bg-neutral-800', text: 'text-neutral-500', border: 'border-neutral-200 dark:border-neutral-700' },
-  missing: { label: 'Missing', bg: 'bg-brand-sage/30 dark:bg-neutral-800', text: 'text-neutral-600 dark:text-neutral-400', border: 'border-neutral-200 dark:border-neutral-700' },
+  strong:  { label: 'Strong',  bg: 'bg-brand-primary/15 dark:bg-brand-primary/20', text: 'text-brand-primary',  border: 'border-brand-primary/30' },
+  partial: { label: 'Partial', bg: 'bg-brand-ai/15 dark:bg-brand-ai/20',           text: 'text-brand-ai',       border: 'border-brand-ai/30' },
+  weak:    { label: 'Weak',    bg: 'bg-brand-sage/40 dark:bg-brand-primary/10',    text: 'text-brand-primary',  border: 'border-brand-primary/20' },
+  missing: { label: 'Missing', bg: 'bg-brand-light dark:bg-brand-primary/10',       text: 'text-neutral-500',    border: 'border-brand-primary/15' },
 }
 
 const PRIORITY_CONFIG: Record<string, { bg: string; text: string }> = {
   high:   { bg: 'bg-brand-primary', text: 'text-white' },
   medium: { bg: 'bg-brand-ai/80',   text: 'text-white' },
-  low:    { bg: 'bg-neutral-300 dark:bg-neutral-700', text: 'text-neutral-700 dark:text-neutral-300' },
+  low:    { bg: 'bg-brand-sage/60 dark:bg-brand-primary/20', text: 'text-brand-primary' },
 }
 
 /** Single expandable evidence row */
@@ -50,8 +50,8 @@ const EvidenceRow: React.FC<{ item: EvidenceItem; index: number }> = ({ item, in
     <>
       {/* Main row */}
       <tr
-        className={`border-b border-neutral-100 dark:border-neutral-800/60 cursor-pointer
-          ${expanded ? 'bg-brand-light/30 dark:bg-brand-primary/5' : 'hover:bg-neutral-50/60 dark:hover:bg-neutral-800/20'}
+        className={`border-b border-brand-primary/10 dark:border-neutral-800/60 cursor-pointer
+          ${expanded ? 'bg-brand-light/60 dark:bg-brand-primary/10' : 'hover:bg-brand-light/30 dark:hover:bg-brand-primary/5'}
           transition-colors`}
         onClick={() => setExpanded((e) => !e)}
       >
@@ -74,10 +74,10 @@ const EvidenceRow: React.FC<{ item: EvidenceItem; index: number }> = ({ item, in
         <td className="px-4 py-3 max-w-[180px]">
           {item.explicit_resume_evidence ? (
             <p className="text-[11px] text-neutral-600 dark:text-neutral-400 leading-relaxed line-clamp-2">
-              {item.explicit_resume_evidence}
+              "{item.explicit_resume_evidence}"
             </p>
           ) : (
-            <span className="text-[10px] text-neutral-300 dark:text-neutral-600 italic">—</span>
+            <span className="text-[10px] text-neutral-400 italic">—</span>
           )}
         </td>
 
@@ -97,7 +97,7 @@ const EvidenceRow: React.FC<{ item: EvidenceItem; index: number }> = ({ item, in
           {semantic !== null ? (
             <div>
               <div className="text-[11px] font-semibold text-neutral-700 dark:text-neutral-300 mb-1">{semantic.toFixed(2)}%</div>
-              <div className="w-full h-1 rounded-full bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
+              <div className="w-full h-1.5 rounded-full bg-brand-sage/30 dark:bg-neutral-800 overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{
@@ -120,10 +120,10 @@ const EvidenceRow: React.FC<{ item: EvidenceItem; index: number }> = ({ item, in
             </span>
           ) : (
             <button
-              className="flex items-center gap-1 text-[10px] font-semibold text-brand-primary hover:text-brand-hover transition-colors"
+              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-brand-light dark:bg-brand-primary/10 text-[10px] font-semibold text-brand-primary border border-brand-primary/20 hover:bg-brand-primary hover:text-white transition-colors"
               onClick={(e) => { e.stopPropagation() }}
             >
-              <PlusCircle size={12} />
+              <PlusCircle size={11} />
               Add Evidence
             </button>
           )}
@@ -139,7 +139,7 @@ const EvidenceRow: React.FC<{ item: EvidenceItem; index: number }> = ({ item, in
 
       {/* Expanded detail panel */}
       {expanded && (
-        <tr className="bg-brand-light/20 dark:bg-brand-primary/5">
+        <tr className="bg-brand-light/40 dark:bg-brand-primary/10">
           <td colSpan={7} className="px-4 py-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
               {/* Left: evidence details */}
@@ -147,7 +147,7 @@ const EvidenceRow: React.FC<{ item: EvidenceItem; index: number }> = ({ item, in
                 <div>
                   <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider mb-1">Matched Resume Text</div>
                   {item.explicit_resume_evidence ? (
-                    <div className="italic text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-900/50 rounded-lg px-3 py-2 border border-neutral-200 dark:border-neutral-700 text-[11px] leading-relaxed">
+                    <div className="italic text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-900/50 rounded-lg px-3 py-2 border border-brand-primary/15 text-[11px] leading-relaxed">
                       "{item.explicit_resume_evidence}"
                     </div>
                   ) : (
@@ -167,7 +167,7 @@ const EvidenceRow: React.FC<{ item: EvidenceItem; index: number }> = ({ item, in
                 {item.explanation && (
                   <div>
                     <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider mb-1">ACE Intelligence Reasoning</div>
-                    <div className="text-neutral-600 dark:text-neutral-400 leading-relaxed bg-white dark:bg-neutral-900/50 rounded-lg px-3 py-2 border border-neutral-200 dark:border-neutral-700">
+                    <div className="text-neutral-600 dark:text-neutral-400 leading-relaxed bg-white dark:bg-neutral-900/50 rounded-lg px-3 py-2 border border-brand-primary/15">
                       {item.explanation}
                     </div>
                   </div>
@@ -186,12 +186,6 @@ const EvidenceRow: React.FC<{ item: EvidenceItem; index: number }> = ({ item, in
                     </div>
                   )}
                 </div>
-                {!hasEvidence && item.explanation && (
-                  <div className="mt-2">
-                    <div className="text-[9px] font-bold text-neutral-400 uppercase tracking-wider mb-1">Recommended Action</div>
-                    <div className="text-neutral-600 dark:text-neutral-400">{item.explanation}</div>
-                  </div>
-                )}
               </div>
             </div>
           </td>
@@ -202,9 +196,7 @@ const EvidenceRow: React.FC<{ item: EvidenceItem; index: number }> = ({ item, in
 }
 
 /**
- * Premium Evidence Matrix section.
- * Redesigns the raw evidence table into a scannable analytical product component.
- * Rows are expandable to show drill-down detail without navigating away.
+ * Premium Evidence Matrix section with subtle light-green analytical surface.
  */
 export const EvidenceMatrixSection: React.FC<EvidenceMatrixSectionProps> = ({
   evidenceMatrix,
@@ -243,21 +235,21 @@ export const EvidenceMatrixSection: React.FC<EvidenceMatrixSectionProps> = ({
           <EmptyState
             icon={<Grid size={16} />}
             title="No evidence matrix available"
-            description="Run an ATS analysis with your target role to see how each requirement is evidenced in your resume."
+            description="Run an ATS analysis with your target role to see evidence strength for each requirement."
             compact
           />
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto bg-gradient-to-b from-brand-light/30 via-transparent to-brand-light/20 dark:from-brand-primary/5 dark:to-transparent">
           <table className="w-full text-left border-collapse min-w-[700px]">
             <thead>
-              <tr className="bg-neutral-50/70 dark:bg-neutral-900/50">
-                <th className="px-4 py-3 text-[9px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">Requirement</th>
-                <th className="px-4 py-3 text-[9px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">Priority</th>
-                <th className="px-4 py-3 text-[9px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">Your Evidence</th>
-                <th className="px-4 py-3 text-[9px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">Evidence Strength</th>
-                <th className="px-4 py-3 text-[9px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">Semantic Match</th>
-                <th className="px-4 py-3 text-[9px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">Action</th>
+              <tr className="bg-brand-light/50 dark:bg-brand-primary/10 border-b border-brand-primary/15">
+                <th className="px-4 py-3 text-[9px] font-bold text-brand-primary dark:text-neutral-400 uppercase tracking-wider">Requirement</th>
+                <th className="px-4 py-3 text-[9px] font-bold text-brand-primary dark:text-neutral-400 uppercase tracking-wider">Priority</th>
+                <th className="px-4 py-3 text-[9px] font-bold text-brand-primary dark:text-neutral-400 uppercase tracking-wider">Your Evidence</th>
+                <th className="px-4 py-3 text-[9px] font-bold text-brand-primary dark:text-neutral-400 uppercase tracking-wider">Evidence Strength</th>
+                <th className="px-4 py-3 text-[9px] font-bold text-brand-primary dark:text-neutral-400 uppercase tracking-wider">Semantic Match</th>
+                <th className="px-4 py-3 text-[9px] font-bold text-brand-primary dark:text-neutral-400 uppercase tracking-wider">Action</th>
                 <th className="px-3 py-3 w-8"></th>
               </tr>
             </thead>

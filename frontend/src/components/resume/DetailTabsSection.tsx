@@ -5,14 +5,12 @@ import { ExperienceTab } from './tabs/ExperienceTab'
 import { EducationTab } from './tabs/EducationTab'
 import { ParsedResumeTab } from './tabs/ParsedResumeTab'
 import { EvidenceMatrixSection } from './EvidenceMatrixSection'
-import { RoadmapSection } from './RoadmapSection'
 
-type TabId = 'ats_categories' | 'evidence' | 'roadmap' | 'experience' | 'projects' | 'education' | 'parsed_resume'
+type TabId = 'ats_categories' | 'evidence' | 'experience' | 'projects' | 'education' | 'parsed_resume'
 
 const TAB_LABELS: Record<TabId, string> = {
   ats_categories: 'ATS Categories',
-  evidence:       'Evidence',
-  roadmap:        'Learning Roadmap',
+  evidence:       'Evidence Matrix',
   experience:     'Experience',
   projects:       'Projects',
   education:      'Education',
@@ -29,8 +27,8 @@ interface DetailTabsSectionProps {
 }
 
 /**
- * Tabbed detail section. All 7 original tabs preserved — layouts redesigned.
- * Tab bar scrolls horizontally on mobile without overflow.
+ * Tabbed detail section.
+ * Removed duplicate Learning Roadmap tab (handled strictly on the dedicated Skill Roadmap page).
  */
 export const DetailTabsSection: React.FC<DetailTabsSectionProps> = ({
   activeTab,
@@ -54,7 +52,7 @@ export const DetailTabsSection: React.FC<DetailTabsSectionProps> = ({
               onClick={() => onTabChange(tab)}
               className={`pb-3 px-3 text-[11px] font-semibold whitespace-nowrap border-b-2 transition-all ${
                 activeTab === tab
-                  ? 'border-brand-primary text-brand-primary dark:text-brand-primary'
+                  ? 'border-brand-primary text-brand-primary dark:text-brand-primary font-bold'
                   : 'border-transparent text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 hover:border-neutral-300 dark:hover:border-neutral-600'
               }`}
             >
@@ -76,46 +74,6 @@ export const DetailTabsSection: React.FC<DetailTabsSectionProps> = ({
             targetRole={targetRole}
             showLimit={8}
           />
-        )}
-
-        {activeTab === 'roadmap' && (
-          <div className="space-y-4">
-            {/* Learning roadmap from careerIntel (more granular individual skill nodes) */}
-            {careerIntel?.learning_roadmap && careerIntel.learning_roadmap.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {careerIntel.learning_roadmap.map((node: any) => {
-                  const statusColors: Record<string, string> = {
-                    completed:   'border-l-brand-primary bg-brand-primary/5 text-brand-primary',
-                    focus:       'border-l-brand-primary bg-brand-primary/5 text-brand-primary',
-                    recommended: 'border-l-brand-ai bg-brand-ai/5 text-brand-ai',
-                    blocked:     'border-l-neutral-300 bg-neutral-50 dark:bg-neutral-900 text-neutral-400',
-                  }
-                  const cfg = statusColors[node.status] || statusColors.recommended
-                  return (
-                    <div key={node.id} className={`p-4 border-l-4 rounded-r-xl border border-neutral-100 dark:border-neutral-800 ${cfg}`}>
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="text-[12px] font-bold text-neutral-800 dark:text-white">{node.name}</span>
-                        <span className="px-2 py-0.5 rounded-full bg-white dark:bg-neutral-900 border border-current/20 text-[9px] font-bold capitalize">
-                          {node.status}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed mb-2">{node.reason}</p>
-                      <div className="flex gap-4 text-[10px] text-neutral-400 font-medium">
-                        {node.estimated_effort_hours && <span>Effort: <strong>{node.estimated_effort_hours}h</strong></span>}
-                        {node.impact && <span>Impact: <strong className="capitalize">{node.impact}</strong></span>}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <RoadmapSection
-                immediate={atsAnalysis?.career_roadmap?.immediate_1_2_weeks || []}
-                shortTerm={atsAnalysis?.career_roadmap?.short_term_1_2_months || []}
-                longTerm={atsAnalysis?.career_roadmap?.long_term_3_6_months || []}
-              />
-            )}
-          </div>
         )}
 
         {activeTab === 'experience' && (

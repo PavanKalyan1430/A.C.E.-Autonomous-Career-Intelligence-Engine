@@ -1,7 +1,7 @@
 import React from 'react'
-import { ArrowRight } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowRight, Layers } from 'lucide-react'
 import { EmptyState } from './EmptyState'
-import { Layers } from 'lucide-react'
 
 interface MissingKeyword {
   keyword: string
@@ -21,16 +21,12 @@ const PRIORITY_CONFIG: Record<string, { bg: string; text: string }> = {
   low:    { bg: 'bg-neutral-100',       text: 'text-neutral-500'   },
 }
 
-/**
- * AI Career Guidance panel — shows the single highest-impact missing requirement.
- * All content (reason, priority, keyword) comes directly from the API response.
- * Nothing is fabricated or constructed from templates.
- */
 export const CareerGuidancePanel: React.FC<CareerGuidancePanelProps> = ({
   missingKeywords,
   targetRole,
   learningRoadmap = [],
 }) => {
+  const navigate = useNavigate()
   const topGap = missingKeywords.find((k) => k.priority?.toLowerCase() === 'high') ?? missingKeywords[0]
 
   // Collect real reasons only — from the keyword's own reason field or a matching roadmap node
@@ -82,7 +78,7 @@ export const CareerGuidancePanel: React.FC<CareerGuidancePanelProps> = ({
             </div>
           </div>
 
-          {/* Reasons from API only — renders nothing if no real reasons */}
+          {/* Reasons from API only */}
           {realReasons.length > 0 && (
             <div className="mb-5">
               <div className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-2">
@@ -123,10 +119,13 @@ export const CareerGuidancePanel: React.FC<CareerGuidancePanelProps> = ({
             </div>
           )}
 
-          {/* CTA — scroll to roadmap tab */}
+          {/* CTA — navigates to dedicated Skill Roadmap page */}
           <div className="mt-auto">
-            <button className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-brand-primary text-white text-[12px] font-semibold hover:bg-brand-hover transition-colors group">
-              <span>View Learning Roadmap</span>
+            <button
+              onClick={() => navigate('/skills')}
+              className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-brand-primary text-white text-[12px] font-semibold hover:bg-brand-hover transition-colors group"
+            >
+              <span>View Learning Roadmap →</span>
               <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
             </button>
           </div>

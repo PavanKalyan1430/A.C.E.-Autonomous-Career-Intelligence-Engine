@@ -1,14 +1,15 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import { normalizePercentage } from '@/utils/error'
 import { ResumeHeroSection } from './ResumeHeroSection'
 import { OpportunitiesSection } from './OpportunitiesSection'
 import { ResumeBreakdownSection } from './ResumeBreakdownSection'
 import { EvidenceMatrixSection } from './EvidenceMatrixSection'
-import { RoadmapSection } from './RoadmapSection'
 import { RecommendationCards } from './RecommendationCards'
 import { DetailTabsSection } from './DetailTabsSection'
+import { ArrowRight, MapPin } from 'lucide-react'
 
-type TabId = 'ats_categories' | 'evidence' | 'roadmap' | 'experience' | 'projects' | 'education' | 'parsed_resume'
+type TabId = 'ats_categories' | 'evidence' | 'experience' | 'projects' | 'education' | 'parsed_resume'
 
 interface ResumeIntelligenceDashboardProps {
   atsAnalysis: any
@@ -20,11 +21,9 @@ interface ResumeIntelligenceDashboardProps {
 
 /**
  * Top-level orchestrator for the Resume Intelligence dashboard.
- * Receives all data as props from ResumePage (which owns all queries/mutations).
- * Renders the full premium section layout: hero → opportunities → breakdown →
- * evidence → roadmap → recommendations → detail tabs.
- *
- * No data fetching here — all props come from ResumePage.
+ * Architectural separation strictly enforced:
+ * - Resume Intelligence: Diagnose, Explain, Recommend
+ * - Skill Roadmap (/skills): Plan, Sequence, Track learning
  */
 export const ResumeIntelligenceDashboard: React.FC<ResumeIntelligenceDashboardProps> = ({
   atsAnalysis,
@@ -33,6 +32,8 @@ export const ResumeIntelligenceDashboard: React.FC<ResumeIntelligenceDashboardPr
   activeTab,
   onTabChange,
 }) => {
+  const navigate = useNavigate()
+
   const overallScore = atsAnalysis ? normalizePercentage(atsAnalysis.overall_ats_score) : 0
   const scoreLevel = atsAnalysis?.score_level || 'Moderate'
   const targetRole = atsAnalysis?.target_role || ''
@@ -41,16 +42,10 @@ export const ResumeIntelligenceDashboard: React.FC<ResumeIntelligenceDashboardPr
   const evidenceMatrix = atsAnalysis?.evidence_matrix || []
   const actionableImprovements = atsAnalysis?.actionable_improvements || []
   const missingKeywords = atsAnalysis?.missing_keywords || []
-
-  const careerRoadmap = atsAnalysis?.career_roadmap || {}
-  const immediate = careerRoadmap.immediate_1_2_weeks || []
-  const shortTerm = careerRoadmap.short_term_1_2_months || []
-  const longTerm = careerRoadmap.long_term_3_6_months || []
-
   const learningRoadmap = careerIntel?.learning_roadmap || []
 
   const handleSeeHow = () => {
-    onTabChange('roadmap')
+    onTabChange('evidence')
     setTimeout(() => {
       const el = document.getElementById('ace-detail-tabs')
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -90,14 +85,7 @@ export const ResumeIntelligenceDashboard: React.FC<ResumeIntelligenceDashboardPr
         showLimit={5}
       />
 
-      {/* 5. Action Plan & Roadmap */}
-      <RoadmapSection
-        immediate={immediate}
-        shortTerm={shortTerm}
-        longTerm={longTerm}
-      />
-
-      {/* 6. Actionable Improvement Details */}
+      {/* 5. Actionable Improvement Details */}
       {actionableImprovements.length > 0 && (
         <div className="bg-white dark:bg-[#0D1117] rounded-2xl border border-neutral-200 dark:border-[#1E293B] shadow-card p-5 md:p-6">
           <div className="mb-5">
@@ -112,7 +100,7 @@ export const ResumeIntelligenceDashboard: React.FC<ResumeIntelligenceDashboardPr
         </div>
       )}
 
-      {/* 7. Detail Tabs: ATS | Evidence | Roadmap | Experience | Projects | Education | Parsed Resume */}
+      {/* 6. Detail Tabs: ATS | Evidence | Experience | Projects | Education | Parsed Resume */}
       <div id="ace-detail-tabs">
         <DetailTabsSection
           activeTab={activeTab}
@@ -122,6 +110,30 @@ export const ResumeIntelligenceDashboard: React.FC<ResumeIntelligenceDashboardPr
           careerIntel={careerIntel}
           targetRole={targetRole}
         />
+      </div>
+
+      {/* 7. Compact CTA to the dedicated Skill Roadmap page */}
+      <div className="p-5 bg-gradient-to-r from-brand-light via-brand-sage/20 to-brand-light dark:from-brand-primary/10 dark:to-brand-primary/5 rounded-2xl border border-brand-primary/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-brand-primary text-white flex items-center justify-center flex-shrink-0">
+            <MapPin size={18} />
+          </div>
+          <div>
+            <h4 className="text-[13px] font-bold text-neutral-800 dark:text-white">
+              Ready to sequence your learning & skill building?
+            </h4>
+            <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+              Track your step-by-step career learning plan on the dedicated Skill Roadmap page.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => navigate('/skills')}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-primary text-white text-[12px] font-semibold hover:bg-brand-hover transition-colors flex-shrink-0 group"
+        >
+          <span>View Full Skill Roadmap</span>
+          <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+        </button>
       </div>
 
     </div>
