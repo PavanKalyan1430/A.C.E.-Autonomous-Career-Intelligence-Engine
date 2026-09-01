@@ -157,14 +157,15 @@ class CareerIntelligenceService:
             except Exception as e:
                 logger.warning(f"Could not fetch company insights for {profile_data['target_company']}: {e}")
 
-        # If company stack is empty or missing, try generating expected tech stack dynamically from target role using LLM
+        # If company stack is empty or missing, generate expected tech stack dynamically for the specific target role using LLM
         if not company_tech_stack and profile_data["target_role"]:
             try:
                 role_prompt = f"""
-Identify the standard, high-demand technical skills and tool stack expected for the target role: "{profile_data['target_role']}".
+Identify the standard, high-demand technical skills and tool stack genuinely required for the target role: "{profile_data['target_role']}".
 Strict Rules:
-- If the role is related to AI, Machine Learning, Agentic AI, AI/ML, or GenAI (including abbreviations like "Ai/MI" or "Agentic Ai"), the stack MUST prioritize core AI/ML/Agentic technologies (e.g. Python, PyTorch, LangChain, TensorFlow, Hugging Face, Vector Databases, LlamaIndex, OpenAI API, NumPy, Pandas, Scikit-Learn, Transformers, CUDA, FastAPI). Do NOT list generic web development stacks like Go, Gin, Rust, Kotlin, Fiber, Spring Boot, PHP, or Kafka.
-- Return ONLY a JSON list of strings. Do not include conversational text or markdown code fences.
+- Return ONLY technical skills, frameworks, and tools that are directly relevant and standard for "{profile_data['target_role']}".
+- Do NOT include generic or unrelated software stacks that do not belong to this target role.
+- Return ONLY a JSON list of strings (e.g. ["Skill1", "Skill2", "Skill3"]). Do not include conversational text or markdown code fences.
 """
                 res = await generate_content_with_routing(prompt=role_prompt, response_mime_type="application/json", timeout=10.0)
                 role_skills = json.loads(res.strip())
@@ -172,12 +173,6 @@ Strict Rules:
                     company_tech_stack = normalize_skill_list([str(x) for x in role_skills])
             except Exception as e:
                 logger.warning(f"Failed to generate dynamic tech stack for target role: {e}")
-
-        # Strict domain filter for AI / ML / Agentic roles: strip out completely irrelevant web stacks
-        target_role_lower = profile_data["target_role"].lower()
-        if any(ai_term in target_role_lower for ai_term in ["ai", "machine learning", "ml", "genai", "agentic"]):
-            irrelevant_web_stacks = {"rust", "kotlin", "fiber", "spring boot", "php", "ruby", "rails", "laravel", "net core"}
-            company_tech_stack = [s for s in company_tech_stack if s.lower() not in irrelevant_web_stacks]
 
         # Run ATS analysis to fetch validated evidence & gaps
         ats_analysis = None
