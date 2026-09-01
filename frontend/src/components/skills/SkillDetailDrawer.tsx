@@ -5,7 +5,7 @@ import { authApi } from '@/api'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { SkillNodeData } from './InteractiveRoadmapGraph'
+import type { SkillNodeData } from './InteractiveRoadmapGraph'
 import {
   CheckCircle2,
   Lock,
