@@ -462,7 +462,9 @@ export default function ResumePage() {
           {/* Page Header */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-2">
             <div>
-              <h1 className="text-3xl font-bold text-[#3d3d3d] dark:text-white tracking-tight mb-1">Resume Intelligence</h1>
+              <h1 className="text-3xl font-extrabold bg-gradient-to-r from-[#12362b] via-[#336659] to-[#6B8F71] bg-clip-text text-transparent tracking-tight mb-1">
+                Resume Intelligence
+              </h1>
               <p className="text-neutral-600 dark:text-neutral-400 font-medium">
                 {effectiveRole ? (
                   <>Dynamic profile alignment for <span className="font-bold text-brand-primary">{effectiveRole}</span></>
