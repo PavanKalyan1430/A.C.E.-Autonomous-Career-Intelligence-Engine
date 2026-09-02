@@ -111,8 +111,16 @@ function buildDAGPhases(roadmap: SkillNode[]): DAGPhase[] {
 function parseRoadmap(raw: any[], verifiedSkills: string[]): SkillNode[] {
   return (raw || []).map((n: any) => {
     const rawStatus = (n.status || 'recommended').toLowerCase()
-    const status: NodeStatus = ['completed', 'focus', 'recommended', 'blocked'].includes(rawStatus)
+    let status: NodeStatus = ['completed', 'focus', 'recommended', 'blocked'].includes(rawStatus)
       ? (rawStatus as NodeStatus) : 'recommended'
+      
+    // 🚨 STRICT OVERRIDE: If the user manually verified this skill, force it to 'completed'
+    // This prevents DAG blocking issues if the backend LLM cache returns a stale state.
+    const isActuallyVerified = verifiedSkills.some(s => s.toLowerCase() === n.name.toLowerCase())
+    if (isActuallyVerified) {
+      status = 'completed'
+    }
+    
     const rawImpact = (n.impact || '').toLowerCase()
     const impact: NodeImpact = ['high', 'medium', 'low'].includes(rawImpact)
       ? (rawImpact as NodeImpact) : 'medium'
@@ -144,27 +152,34 @@ const DAGNodeCard: React.FC<{
   const isBlocked = node.status === 'blocked'
   const isRecommended = node.status === 'recommended'
 
-  const baseStyles = 'relative rounded-2xl border-2 p-4 text-left transition-all duration-200 cursor-pointer min-w-[240px] flex flex-col justify-between'
+  const baseStyles = 'relative rounded-xl border p-4 text-left transition-all duration-200 cursor-pointer min-w-[240px] flex flex-col justify-between'
   
   let stateStyles = ''
   if (isFocus) {
-    stateStyles = 'bg-brand-light/30 dark:bg-brand-primary/10 border-brand-primary/80 shadow-[0_4px_20px_rgba(51,102,89,0.15)] hover:shadow-[0_6px_24px_rgba(51,102,89,0.25)] hover:-translate-y-0.5'
+    stateStyles = 'bg-brand-light/30 dark:bg-brand-primary/10 border-brand-primary/40 shadow-[0_4px_16px_rgba(51,102,89,0.06)] hover:shadow-[0_4px_20px_rgba(51,102,89,0.12)] hover:-translate-y-0.5'
   } else if (isCompleted) {
-    stateStyles = 'bg-[#f3efe8]/40 dark:bg-neutral-800/40 border-brand-primary/40 shadow-[0_4px_16px_rgba(51,102,89,0.1)] hover:shadow-[0_6px_20px_rgba(51,102,89,0.18)] hover:-translate-y-0.5'
+    stateStyles = 'bg-brand-primary/5 dark:bg-brand-primary/10 border-brand-primary/20 shadow-[0_2px_10px_rgba(51,102,89,0.04)] hover:shadow-[0_4px_16px_rgba(51,102,89,0.08)] hover:-translate-y-0.5'
   } else if (isRecommended) {
-    stateStyles = 'bg-white dark:bg-[#18291E] border-brand-primary/30 shadow-[0_4px_16px_rgba(51,102,89,0.08)] hover:shadow-[0_6px_20px_rgba(51,102,89,0.16)] hover:border-brand-primary/60 hover:-translate-y-0.5'
+    stateStyles = 'bg-white dark:bg-[#18291E] border-neutral-200 dark:border-neutral-800 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-[0_4px_16px_rgba(51,102,89,0.08)] hover:border-brand-primary/30 hover:-translate-y-0.5'
   } else if (isBlocked) {
     stateStyles = 'bg-neutral-50 dark:bg-neutral-900/50 border-neutral-200 dark:border-neutral-800 opacity-75 grayscale-[0.2]'
   }
 
   const activeStyles = isActive 
-    ? 'ring-2 ring-brand-primary border-brand-primary shadow-[0_0_24px_rgba(51,102,89,0.25)] scale-[1.02]' 
+    ? 'ring-2 ring-brand-primary ring-offset-2 ring-offset-white dark:ring-offset-[#0D1117] border-brand-primary shadow-[0_0_16px_rgba(51,102,89,0.15)] scale-[1.02]' 
     : ''
 
   const StatusIcon = isCompleted ? CheckCircle2 : isBlocked ? Lock : isFocus ? Zap : Circle
 
   return (
     <div onClick={onClick} className={`${baseStyles} ${stateStyles} ${activeStyles}`}>
+      {/* Top Right Checkmark for Completed */}
+      {isCompleted && (
+        <div className="absolute -top-2 -right-2 bg-brand-primary text-white rounded-full p-0.5 shadow-md border-2 border-white dark:border-[#0D1117]">
+          <CheckCircle2 size={14} />
+        </div>
+      )}
+      
       {/* Node Header */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <h3 className={`font-bold text-sm leading-tight ${isFocus ? 'text-brand-primary dark:text-[#E3EFD3]' : isBlocked ? 'text-neutral-500' : 'text-neutral-800 dark:text-neutral-100'}`}>

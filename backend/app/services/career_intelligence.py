@@ -230,6 +230,17 @@ Strict Rules:
             for ws in weak_skills:
                 if ws not in matched_skills and ws not in missing_skills:
                     missing_skills.append(ws)
+                    
+            # 🚨 OVERRIDE: Manually verified skills MUST be considered matched!
+            matched_lower = {s.lower().strip() for s in matched_skills}
+            for vs in profile_data["verified_skills"]:
+                vs_norm = vs.strip()
+                if vs_norm.lower() not in matched_lower:
+                    matched_skills.append(vs_norm)
+                    matched_lower.add(vs_norm.lower())
+            
+            # Remove any verified skills from the missing gaps
+            missing_skills = [m for m in missing_skills if m.lower().strip() not in matched_lower]
             
             total_reqs = len(matched_skills) + len(missing_skills)
             coverage_pct = round((len(matched_skills) / max(total_reqs, 1)) * 100, 1)
