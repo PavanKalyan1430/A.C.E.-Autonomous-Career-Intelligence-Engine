@@ -61,9 +61,9 @@ function buildDAGPhases(roadmap: SkillNode[]): DAGPhase[] {
 
   const unassigned = [...roadmap]
   const phases: DAGPhase[] = []
-  const resolvedSkillNames = new Set<string>(
-    roadmap.filter(n => n.status === 'completed').map(n => n.name.toLowerCase())
-  )
+  const resolvedSkillNames = roadmap
+    .filter(n => n.status === 'completed')
+    .map(n => n.name)
 
   let phaseIdx = 1
   // Max iterations to prevent infinite loop on cyclic prereqs
@@ -74,7 +74,7 @@ function buildDAGPhases(roadmap: SkillNode[]): DAGPhase[] {
     
     // Find nodes whose unmet prereqs are all either met globally OR present in `resolvedSkillNames`
     const currentPhaseNodes = unassigned.filter(node => {
-      const missingPrereqs = node.prereqs.filter(p => !p.met && !resolvedSkillNames.has(p.name.toLowerCase()))
+      const missingPrereqs = node.prereqs.filter(p => !p.met && !resolvedSkillNames.some(s => normalizeSkillMatch(s, p.name)))
       return missingPrereqs.length === 0
     })
 
@@ -94,7 +94,7 @@ function buildDAGPhases(roadmap: SkillNode[]): DAGPhase[] {
       nodes: currentPhaseNodes
     })
 
-    currentPhaseNodes.forEach(n => resolvedSkillNames.add(n.name.toLowerCase()))
+    currentPhaseNodes.forEach(n => resolvedSkillNames.push(n.name))
     
     // Remove assigned nodes from unassigned pool
     currentPhaseNodes.forEach(n => {
@@ -108,6 +108,12 @@ function buildDAGPhases(roadmap: SkillNode[]): DAGPhase[] {
   return phases
 }
 
+// Helper to robustly match LLM skill IDs vs display names
+function normalizeSkillMatch(a: string, b: string): boolean {
+  const clean = (s: string) => s.toLowerCase().replace(/[-_]/g, ' ').trim()
+  return clean(a) === clean(b)
+}
+
 function parseRoadmap(raw: any[], verifiedSkills: string[]): SkillNode[] {
   return (raw || []).map((n: any) => {
     const rawStatus = (n.status || 'recommended').toLowerCase()
@@ -116,7 +122,7 @@ function parseRoadmap(raw: any[], verifiedSkills: string[]): SkillNode[] {
       
     // 🚨 STRICT OVERRIDE: If the user manually verified this skill, force it to 'completed'
     // This prevents DAG blocking issues if the backend LLM cache returns a stale state.
-    const isActuallyVerified = verifiedSkills.some(s => s.toLowerCase() === n.name.toLowerCase())
+    const isActuallyVerified = verifiedSkills.some(s => normalizeSkillMatch(s, n.name))
     if (isActuallyVerified) {
       status = 'completed'
     }
@@ -132,7 +138,7 @@ function parseRoadmap(raw: any[], verifiedSkills: string[]): SkillNode[] {
       prereqs: (n.prerequisites || []).map((p: any) => ({
         name: typeof p === 'string' ? p : p.name,
         met: typeof p === 'string'
-          ? verifiedSkills.some(s => s.toLowerCase() === p.toLowerCase())
+          ? verifiedSkills.some(s => normalizeSkillMatch(s, p))
           : !!p.met,
       })),
       reason: n.reason || '',
