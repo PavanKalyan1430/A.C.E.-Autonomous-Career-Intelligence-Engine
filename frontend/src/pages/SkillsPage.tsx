@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { resumeApi, careerApi, authApi } from '@/api'
 import { normalizePercentage } from '@/utils/error'
 import { useNavigationStore } from '@/store/navigationStore'
@@ -202,7 +202,9 @@ const DiagnosticWorkspace: React.FC<{
   targetRole: string
   verifiedSkills: string[]
   navigate: ReturnType<typeof useNavigate>
-}> = ({ skill, targetRole, navigate }) => {
+  onToggleCompletion: (skillName: string) => void
+  isToggling: boolean
+}> = ({ skill, targetRole, navigate, onToggleCompletion, isToggling }) => {
   if (!skill) {
     return (
       <div className="rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-[#18291E] p-8 text-center">
@@ -212,6 +214,7 @@ const DiagnosticWorkspace: React.FC<{
     )
   }
 
+  const isCompleted = skill.status === 'completed'
   const isFocus = skill.status === 'focus'
   const metPrereqs = skill.prereqs.filter(p => p.met)
   const unmetPrereqs = skill.prereqs.filter(p => !p.met)
@@ -231,7 +234,16 @@ const DiagnosticWorkspace: React.FC<{
             {isFocus && <span className="inline-flex h-2 w-2 rounded-full bg-brand-primary shadow-[0_0_8px_rgba(51,102,89,0.8)]" />}
           </h2>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button 
+            size="sm" 
+            variant={isCompleted ? 'secondary' : 'default'}
+            onClick={() => onToggleCompletion(skill.name)}
+            isLoading={isToggling}
+            icon={<CheckCircle2 size={14} className={isCompleted ? 'text-brand-primary' : ''} />}
+          >
+            {isCompleted ? 'Completed ✓ (Unmark)' : 'Mark as Completed'}
+          </Button>
           <Button size="sm" variant="secondary" onClick={() => navigate('/resume', { state: { triggerUpload: true } })} icon={<BookOpen size={14} />}>
             Upload Proof
           </Button>
@@ -403,6 +415,18 @@ export default function SkillsPage() {
     || nextFocus
     || roadmap[0]
     || null
+
+  const queryClient = useQueryClient()
+  const toggleSkillMutation = useMutation({
+    mutationFn: (skillName: string) => careerApi.toggleSkillCompletion(skillName).then(r => r.data),
+    onSuccess: (data) => {
+      if (data?.intelligence) {
+        queryClient.setQueryData(['careerIntelligence'], data.intelligence)
+      }
+      queryClient.invalidateQueries({ queryKey: ['careerIntelligence'] })
+      queryClient.invalidateQueries({ queryKey: ['userProfile'] })
+    }
+  })
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true)
@@ -683,6 +707,8 @@ export default function SkillsPage() {
               targetRole={targetRole}
               verifiedSkills={verifiedSkills}
               navigate={navigate}
+              onToggleCompletion={(name) => toggleSkillMutation.mutate(name)}
+              isToggling={toggleSkillMutation.isPending}
             />
           </div>
 

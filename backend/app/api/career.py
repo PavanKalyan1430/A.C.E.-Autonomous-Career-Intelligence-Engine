@@ -88,6 +88,42 @@ async def get_career_intelligence(
     intel_data = await career_intelligence_service.generate_career_intelligence(current_user.id, db)
     return CareerIntelligenceResponse(**intel_data)
 
+@router.post("/skills/complete")
+async def toggle_skill_completion(
+    payload: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    skill_name = payload.get("skill_name")
+    if not skill_name or not isinstance(skill_name, str):
+        raise HTTPException(status_code=400, detail="skill_name is required")
+        
+    res_prof = await db.execute(select(Profile).filter(Profile.user_id == current_user.id))
+    profile = res_prof.scalars().first()
+    if not profile:
+        profile = Profile(user_id=current_user.id)
+        db.add(profile)
+        
+    current_skills_json = profile.skills_json or {"skills": []}
+    skills_list = list(current_skills_json.get("skills", []))
+    
+    # Toggle skill in verified list (case-insensitive check)
+    existing_match = next((s for s in skills_list if s.lower() == skill_name.strip().lower()), None)
+    if existing_match:
+        skills_list.remove(existing_match)
+        is_completed = False
+    else:
+        skills_list.append(skill_name.strip())
+        is_completed = True
+        
+    profile.skills_json = {"skills": skills_list}
+    await db.commit()
+    await db.refresh(profile)
+    
+    # Generate updated intelligence
+    intel_data = await career_intelligence_service.generate_career_intelligence(current_user.id, db)
+    return {"status": "success", "is_completed": is_completed, "intelligence": intel_data}
+
 @router.post("/refresh", response_model=CareerIntelligenceResponse)
 async def refresh_career_intelligence(
     current_user: User = Depends(get_current_user),

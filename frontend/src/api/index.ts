@@ -88,6 +88,7 @@ export const careerApi = {
   getProfile: () => api.get('/career/profile'),
   getIntelligence: () => api.get('/career/intelligence'),
   refresh: () => api.post('/career/refresh'),
+  toggleSkillCompletion: (skill_name: string) => api.post('/career/skills/complete', { skill_name }),
   suggestRoles: (query: string, config?: any) => api.get('/career/roles/suggest', { params: { query }, ...config }),
   searchRoles: (q: string, country?: string, config?: any) => api.get('/career/roles/search', { params: { q, country }, ...config }),
 }
@@ -134,5 +135,6 @@ export const jobsApi = {
     limit?: number
   }) => api.get('/jobs/discover', { params }),
   apply: (payload: any) => api.post('/jobs/apply', payload),
+  confirmApply: (payload: any) => api.post('/jobs/confirm-apply', payload),
   track: (payload: any) => api.post('/jobs/track', payload),
 }
