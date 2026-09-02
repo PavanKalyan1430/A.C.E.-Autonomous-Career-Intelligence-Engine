@@ -148,17 +148,17 @@ const DAGNodeCard: React.FC<{
   
   let stateStyles = ''
   if (isFocus) {
-    stateStyles = 'bg-brand-light dark:bg-brand-primary/10 border-brand-primary/60 shadow-[0_0_15px_rgba(51,102,89,0.15)] hover:shadow-[0_0_20px_rgba(51,102,89,0.25)] hover:-translate-y-1'
+    stateStyles = 'bg-brand-light dark:bg-brand-primary/10 border-brand-primary/60 shadow-[0_4px_20px_rgba(51,102,89,0.18)] hover:shadow-[0_6px_24px_rgba(51,102,89,0.28)] hover:-translate-y-1'
   } else if (isCompleted) {
-    stateStyles = 'bg-[#f3efe8]/50 dark:bg-neutral-800/40 border-brand-primary/20 hover:border-brand-primary/40'
+    stateStyles = 'bg-[#f3efe8]/50 dark:bg-neutral-800/40 border-brand-primary/30 shadow-[0_2px_12px_rgba(51,102,89,0.08)] hover:shadow-[0_4px_16px_rgba(51,102,89,0.16)] hover:-translate-y-0.5'
   } else if (isRecommended) {
-    stateStyles = 'bg-white dark:bg-[#18291E] border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 hover:shadow-sm hover:-translate-y-0.5'
+    stateStyles = 'bg-white dark:bg-[#18291E] border-neutral-200 dark:border-neutral-700/80 shadow-[0_2px_10px_rgba(51,102,89,0.06)] hover:shadow-[0_4px_16px_rgba(51,102,89,0.14)] hover:border-brand-primary/40 hover:-translate-y-0.5'
   } else if (isBlocked) {
     stateStyles = 'bg-neutral-50 dark:bg-neutral-900/50 border-neutral-200 dark:border-neutral-800 opacity-75 grayscale-[0.2]'
   }
 
   const activeStyles = isActive 
-    ? 'ring-2 ring-brand-primary/80 ring-offset-2 ring-offset-[var(--surface-secondary)] scale-[1.02]' 
+    ? 'ring-2 ring-brand-primary ring-offset-2 ring-offset-white dark:ring-offset-[#0D1117] shadow-[0_0_20px_rgba(51,102,89,0.25)] scale-[1.02]' 
     : ''
 
   const StatusIcon = isCompleted ? CheckCircle2 : isBlocked ? Lock : isFocus ? Zap : Circle
@@ -237,17 +237,18 @@ const DiagnosticWorkspace: React.FC<{
         <div className="flex flex-wrap gap-2">
           <Button 
             size="sm" 
-            variant={isCompleted ? 'secondary' : 'default'}
+            variant={isCompleted ? 'secondary' : 'primary'}
             onClick={() => onToggleCompletion(skill.name)}
             isLoading={isToggling}
-            icon={<CheckCircle2 size={14} className={isCompleted ? 'text-brand-primary' : ''} />}
+            className={!isCompleted ? 'bg-brand-primary hover:bg-brand-hover text-white shadow-[0_2px_10px_rgba(51,102,89,0.2)]' : 'border-brand-primary/40 text-brand-primary dark:text-[#E3EFD3]'}
+            icon={<CheckCircle2 size={14} className={isCompleted ? 'text-brand-primary' : 'text-white'} />}
           >
             {isCompleted ? 'Completed ✓ (Unmark)' : 'Mark as Completed'}
           </Button>
           <Button size="sm" variant="secondary" onClick={() => navigate('/resume', { state: { triggerUpload: true } })} icon={<BookOpen size={14} />}>
             Upload Proof
           </Button>
-          <Button size="sm" onClick={() => navigate('/assistant', { state: { initialPrompt: `How can I learn ${skill.name} for my ${targetRole} role?` } })} icon={<Brain size={14} />}>
+          <Button size="sm" variant="primary" onClick={() => navigate('/assistant', { state: { initialPrompt: `How can I learn ${skill.name} for my ${targetRole} role?` } })} icon={<Brain size={14} />}>
             Ask A.C.E.
           </Button>
         </div>
