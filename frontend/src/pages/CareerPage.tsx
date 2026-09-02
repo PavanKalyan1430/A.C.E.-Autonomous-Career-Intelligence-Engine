@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { agentApi, memoryApi, resumeApi, analyticsApi, careerApi } from '@/api'
 import { useAuthStore } from '@/store/authStore'
@@ -35,6 +35,7 @@ export default function CareerPage() {
   const { user } = useAuthStore()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const location = useLocation()
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
   const [inputText, setInputText] = useState('')
   const [isRecording, setIsRecording] = useState(false)
@@ -100,6 +101,17 @@ export default function CareerPage() {
     },
     retry: false
   })
+
+  // Auto-send prompt when navigated with state (e.g. from Ask A.C.E. on SkillsPage)
+  const initialPromptSent = useRef(false)
+  useEffect(() => {
+    const statePrompt = (location.state as any)?.initialPrompt
+    if (statePrompt && !initialPromptSent.current) {
+      initialPromptSent.current = true
+      chatMutation.mutate(statePrompt)
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location.state, navigate, location.pathname, chatMutation])
 
   // Scroll to bottom on new messages
   useEffect(() => {
