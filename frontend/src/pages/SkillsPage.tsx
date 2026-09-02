@@ -368,6 +368,8 @@ export default function SkillsPage() {
     queryKey: ['latestResume'],
     queryFn: () => resumeApi.getLatest().then(r => r.data),
     retry: false,
+    staleTime: Infinity,
+    refetchOnMount: false,
   })
 
   // 2. Fetch career intelligence
@@ -375,6 +377,8 @@ export default function SkillsPage() {
     queryKey: ['careerIntelligence'],
     queryFn: () => careerApi.getIntelligence().then(r => r.data),
     retry: false,
+    staleTime: Infinity,
+    refetchOnMount: false,
   })
 
   const isLoading = resumeLoading || intelLoading

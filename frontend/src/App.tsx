@@ -19,7 +19,16 @@ import AnalyticsPage from '@/pages/AnalyticsPage'
 import SettingsPage from '@/pages/SettingsPage'
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: Infinity, // Data remains fresh indefinitely until explicitly invalidated (e.g. on role update or manual refresh)
+      gcTime: 1000 * 60 * 60, // Cache for 1 hour
+      refetchOnWindowFocus: false, // Prevent refetch on tab focus
+      refetchOnMount: false, // Prevent refetch when navigating back to a page
+      refetchOnReconnect: false, // Prevent refetch on reconnect
+    },
+  },
 })
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
