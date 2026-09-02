@@ -117,6 +117,7 @@ async def toggle_skill_completion(
         is_completed = True
         
     profile.skills_json = {"skills": skills_list}
+    db.add(profile)
     await db.commit()
     await db.refresh(profile)
     

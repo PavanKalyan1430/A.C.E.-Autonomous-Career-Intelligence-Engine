@@ -148,17 +148,17 @@ const DAGNodeCard: React.FC<{
   
   let stateStyles = ''
   if (isFocus) {
-    stateStyles = 'bg-brand-light dark:bg-brand-primary/10 border-brand-primary/60 shadow-[0_4px_20px_rgba(51,102,89,0.18)] hover:shadow-[0_6px_24px_rgba(51,102,89,0.28)] hover:-translate-y-1'
+    stateStyles = 'bg-brand-light dark:bg-brand-primary/10 border-2 border-brand-primary/80 shadow-[0_4px_20px_rgba(51,102,89,0.22)] hover:shadow-[0_6px_26px_rgba(51,102,89,0.32)] hover:-translate-y-1'
   } else if (isCompleted) {
-    stateStyles = 'bg-[#f3efe8]/50 dark:bg-neutral-800/40 border-brand-primary/30 shadow-[0_2px_12px_rgba(51,102,89,0.08)] hover:shadow-[0_4px_16px_rgba(51,102,89,0.16)] hover:-translate-y-0.5'
+    stateStyles = 'bg-[#f3efe8]/50 dark:bg-neutral-800/40 border-2 border-brand-primary/60 shadow-[0_4px_18px_rgba(51,102,89,0.15)] hover:shadow-[0_6px_22px_rgba(51,102,89,0.25)] hover:-translate-y-0.5'
   } else if (isRecommended) {
-    stateStyles = 'bg-white dark:bg-[#18291E] border-neutral-200 dark:border-neutral-700/80 shadow-[0_2px_10px_rgba(51,102,89,0.06)] hover:shadow-[0_4px_16px_rgba(51,102,89,0.14)] hover:border-brand-primary/40 hover:-translate-y-0.5'
+    stateStyles = 'bg-white dark:bg-[#18291E] border-2 border-brand-primary/40 shadow-[0_4px_16px_rgba(51,102,89,0.12)] hover:shadow-[0_6px_22px_rgba(51,102,89,0.22)] hover:border-brand-primary/70 hover:-translate-y-0.5'
   } else if (isBlocked) {
-    stateStyles = 'bg-neutral-50 dark:bg-neutral-900/50 border-neutral-200 dark:border-neutral-800 opacity-75 grayscale-[0.2]'
+    stateStyles = 'bg-neutral-50 dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-800 opacity-75 grayscale-[0.2]'
   }
 
   const activeStyles = isActive 
-    ? 'ring-2 ring-brand-primary ring-offset-2 ring-offset-white dark:ring-offset-[#0D1117] shadow-[0_0_20px_rgba(51,102,89,0.25)] scale-[1.02]' 
+    ? 'ring-2 ring-brand-primary ring-offset-2 ring-offset-white dark:ring-offset-[#0D1117] shadow-[0_0_24px_rgba(51,102,89,0.3)] scale-[1.02]' 
     : ''
 
   const StatusIcon = isCompleted ? CheckCircle2 : isBlocked ? Lock : isFocus ? Zap : Circle
