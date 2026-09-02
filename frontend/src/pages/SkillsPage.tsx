@@ -362,6 +362,7 @@ export default function SkillsPage() {
   const navigate = useNavigate()
   const { selectedSkillNodeId, setSelectedSkillNodeId } = useNavigationStore()
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [selectedVelocity, setSelectedVelocity] = useState<number>(10)
 
   // 1. Fetch resume
   const { data: resume, isLoading: resumeLoading } = useQuery({
@@ -588,19 +589,32 @@ export default function SkillsPage() {
           </p>
           
           <div className="flex justify-between gap-2 mb-6">
-            {[5, 10, 15].map(h => (
-              <div key={h} className={`flex-1 text-center py-2 rounded-lg border text-sm font-bold cursor-default transition-all ${
-                h === 10 ? 'bg-brand-primary text-white border-brand-primary shadow-sm' : 'bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400'
-              }`}>
-                {h}h / wk
-              </div>
+            {[
+              { hours: 5, label: 'Casual' },
+              { hours: 10, label: 'Accelerated' },
+              { hours: 15, label: 'Intensive' }
+            ].map(v => (
+              <button 
+                key={v.hours}
+                onClick={() => setSelectedVelocity(v.hours)}
+                className={`flex-1 text-center py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                  selectedVelocity === v.hours 
+                    ? 'bg-brand-primary text-white border-brand-primary shadow-sm scale-[1.02]' 
+                    : 'bg-neutral-50 dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:border-neutral-300'
+                }`}
+              >
+                <div>{v.hours}h / wk</div>
+                <div className={`text-[9px] font-normal mt-0.5 ${selectedVelocity === v.hours ? 'text-white/80' : 'text-neutral-400'}`}>{v.label}</div>
+              </button>
             ))}
           </div>
           
           <div className="mt-auto flex justify-between items-center text-xs font-semibold pt-4 border-t border-neutral-100 dark:border-neutral-800">
-            <span className="text-neutral-500">Pace: <span className="text-brand-primary">Accelerated</span></span>
             <span className="text-neutral-500">
-              Ready in <span className="text-neutral-900 dark:text-white">~{Math.ceil(totalHours / 10)} wks</span>
+              Pace: <span className="text-brand-primary">{selectedVelocity === 5 ? 'Casual' : selectedVelocity === 15 ? 'Intensive' : 'Accelerated'}</span>
+            </span>
+            <span className="text-neutral-500">
+              Ready in <span className="text-neutral-900 dark:text-white">~{totalHours > 0 ? Math.ceil(totalHours / selectedVelocity) : 0} wks</span>
             </span>
           </div>
         </div>
