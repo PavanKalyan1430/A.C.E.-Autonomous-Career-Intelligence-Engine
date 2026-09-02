@@ -102,6 +102,21 @@ export default function CareerPage() {
     retry: false
   })
 
+  // 5. Submit chat mutation
+  const chatMutation = useMutation({
+    mutationFn: async (message: string) => {
+      const res = await agentApi.query(message, activeSessionId || undefined)
+      return res.data
+    },
+    onSuccess: (data) => {
+      setInputText('')
+      // Invalidate queries to reload session list and active detail
+      queryClient.invalidateQueries({ queryKey: ['chatSessions'] })
+      queryClient.invalidateQueries({ queryKey: ['chatSessionDetail', data.session_id] })
+      setActiveSessionId(data.session_id)
+    }
+  })
+
   // Auto-send prompt when navigated with state (e.g. from Ask A.C.E. on SkillsPage)
   const initialPromptSent = useRef(false)
   useEffect(() => {
@@ -117,21 +132,6 @@ export default function CareerPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [activeSession?.messages, isSessionDetailLoading])
-
-  // 5. Submit chat mutation
-  const chatMutation = useMutation({
-    mutationFn: async (message: string) => {
-      const res = await agentApi.query(message, activeSessionId || undefined)
-      return res.data
-    },
-    onSuccess: (data) => {
-      setInputText('')
-      // Invalidate queries to reload session list and active detail
-      queryClient.invalidateQueries({ queryKey: ['chatSessions'] })
-      queryClient.invalidateQueries({ queryKey: ['chatSessionDetail', data.session_id] })
-      setActiveSessionId(data.session_id)
-    }
-  })
 
   // 6. Delete session mutation
   const deleteSessionMutation = useMutation({
