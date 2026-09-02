@@ -120,8 +120,8 @@ async def toggle_skill_completion(
     await db.commit()
     await db.refresh(profile)
     
-    # Generate updated intelligence
-    intel_data = await career_intelligence_service.generate_career_intelligence(current_user.id, db)
+    # Generate updated intelligence with force_refresh
+    intel_data = await career_intelligence_service.generate_career_intelligence(current_user.id, db, force_refresh=True)
     return {"status": "success", "is_completed": is_completed, "intelligence": intel_data}
 
 @router.post("/refresh", response_model=CareerIntelligenceResponse)
@@ -129,5 +129,5 @@ async def refresh_career_intelligence(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    intel_data = await career_intelligence_service.generate_career_intelligence(current_user.id, db)
+    intel_data = await career_intelligence_service.generate_career_intelligence(current_user.id, db, force_refresh=True)
     return CareerIntelligenceResponse(**intel_data)

@@ -134,9 +134,26 @@ class CareerIntelligenceService:
         }
 
     async def generate_career_intelligence(
-        self, user_id: int, db: AsyncSession
+        self, user_id: int, db: AsyncSession, force_refresh: bool = False
     ) -> Dict[str, Any]:
+        import hashlib
         profile_data = await self.get_canonical_candidate_profile(user_id, db)
+
+        # Check backend persistent cache unless force_refresh is requested
+        res_prof = await db.execute(select(Profile).filter(Profile.user_id == user_id))
+        profile_obj = res_prof.scalars().first()
+
+        verified_str = ",".join(sorted(profile_data.get("verified_skills", [])))
+        state_str = f"{profile_data.get('target_role', '')}:{verified_str}:{profile_data.get('target_company', '')}"
+        state_hash = hashlib.md5(state_str.encode("utf-8")).hexdigest()
+
+        if profile_obj and profile_obj.preferences and not force_refresh:
+            cached = profile_obj.preferences.get("career_intelligence_cache")
+            if isinstance(cached, dict) and cached.get("state_hash") == state_hash:
+                intel_res = cached.get("intelligence")
+                if intel_res and isinstance(intel_res, dict) and "learning_roadmap" in intel_res:
+                    logger.info("Serving career intelligence instantly from backend cache.")
+                    return intel_res
 
         # Retrieve the latest resume to run ATS analysis
         res_resumes = await db.execute(
@@ -420,7 +437,7 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
                 
             enriched_roadmap.append(node_copy)
 
-        return {
+        final_result = {
             "profile": profile_data,
             "skill_alignment": {
                 "target_role": profile_data["target_role"],
@@ -434,6 +451,18 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
             "recommendations": data.get("recommendations", []),
             "ai_synthesis": data.get("ai_synthesis")
         }
+
+        # Persist generated result to database cache for zero-latency subsequent fetches
+        if profile_obj:
+            profile_obj.preferences = dict(profile_obj.preferences or {})
+            profile_obj.preferences["career_intelligence_cache"] = {
+                "state_hash": state_hash,
+                "intelligence": final_result
+            }
+            db.add(profile_obj)
+            await db.commit()
+
+        return final_result
 
     async def generate_dashboard_recommendation(
         self, user_id: int, db: AsyncSession, force_refresh: bool = False
