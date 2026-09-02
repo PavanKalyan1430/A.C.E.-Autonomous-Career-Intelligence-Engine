@@ -408,9 +408,33 @@ export default function SkillsPage() {
   // ── Loading ──
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-8 p-4">
-        <Skeleton className="h-24 w-full rounded-2xl" />
-        <Skeleton className="h-48 w-full rounded-2xl" />
+      <div className="max-w-[1400px] mx-auto flex flex-col gap-8 pb-16 animate-fade-in">
+        <div className="flex justify-between items-center">
+          <div>
+            <Skeleton className="h-8 w-48 mb-2 rounded-xl" />
+            <Skeleton className="h-4 w-72 rounded-lg" />
+          </div>
+          <div className="flex gap-3">
+            <Skeleton className="h-9 w-28 rounded-xl" />
+            <Skeleton className="h-9 w-36 rounded-xl" />
+          </div>
+        </div>
+        <Skeleton className="h-44 w-full rounded-2xl" />
+        <div className="flex flex-col lg:flex-row gap-6">
+          <Skeleton className="h-36 lg:w-[65%] rounded-2xl" />
+          <Skeleton className="h-36 lg:w-[35%] rounded-2xl" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-8 flex flex-col gap-8">
+            <Skeleton className="h-96 w-full rounded-2xl" />
+            <Skeleton className="h-64 w-full rounded-2xl" />
+          </div>
+          <div className="lg:col-span-4 flex flex-col gap-4">
+            <Skeleton className="h-40 w-full rounded-2xl" />
+            <Skeleton className="h-48 w-full rounded-2xl" />
+            <Skeleton className="h-44 w-full rounded-2xl" />
+          </div>
+        </div>
       </div>
     )
   }
