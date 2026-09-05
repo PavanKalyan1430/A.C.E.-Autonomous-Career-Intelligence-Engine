@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { resumeApi, jobsApi } from '@/api'
+import { resumeApi, jobsApi, applicationsApi } from '@/api'
+import { useNavigationStore } from '@/store/navigationStore'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -24,6 +25,8 @@ import {
   Globe,
   DollarSign,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Info,
   Filter,
   ArrowUpRight,
@@ -36,41 +39,55 @@ export default function JobsPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   
-  // ─── SEARCH & FILTER INPUT STATES ──────────────────────────────────────────
-  const [keyword, setKeyword] = useState('')
-  const [location, setLocation] = useState('')
-  const [role, setRole] = useState('')
-  const [jobType, setJobType] = useState('')
-  const [experience, setExperience] = useState('')
-  const [remoteOnsite, setRemoteOnsite] = useState('')
-  const [skills, setSkills] = useState('')
-  const [salaryMin, setSalaryMin] = useState('')
-  const [sortBy, setSortBy] = useState('relevance')
-  const [page, setPage] = useState(1)
+  const {
+    jobInputs,
+    jobSearchParams: searchParams,
+    hasSearchedJobs: hasSearched,
+    selectedJobId,
+    setJobInputs,
+    setJobSearchParams,
+    setHasSearchedJobs: setHasSearched,
+    setSelectedJobId,
+    resetJobsState
+  } = useNavigationStore()
 
-  // Track whether user has triggered a search — default false prevents automatic API calls on mount
-  const [hasSearched, setHasSearched] = useState(false)
+  // Convenience state getters & setters mapped to store
+  const keyword = jobInputs.keyword
+  const location = jobInputs.location
+  const role = jobInputs.role
+  const jobType = jobInputs.job_type
+  const experience = jobInputs.experience
+  const remoteOnsite = jobInputs.remote_onsite
+  const skills = jobInputs.skills
+  const salaryMin = jobInputs.salary_min
+  const page = searchParams.page
+
+  const setKeyword = (val: string) => setJobInputs({ keyword: val })
+  const setLocation = (val: string) => setJobInputs({ location: val })
+  const setRole = (val: string) => setJobInputs({ role: val })
+  const setJobType = (val: string) => setJobInputs({ job_type: val })
+  const setExperience = (val: string) => setJobInputs({ experience: val })
+  const setRemoteOnsite = (val: string) => setJobInputs({ remote_onsite: val })
+  const setSkills = (val: string) => setJobInputs({ skills: val })
+  const setSalaryMin = (val: string) => setJobInputs({ salary_min: val })
 
   // Track search progress for animated loading bar
   const [searchProgress, setSearchProgress] = useState(0)
   const [showProgress, setShowProgress] = useState(false)
 
-  // Applied search parameters (sent to API)
-  const [searchParams, setSearchParams] = useState({
-    keyword: '',
-    location: '',
-    role: '',
-    job_type: '',
-    experience: '',
-    remote_onsite: '',
-    skills: '',
-    salary_min: '',
-    sort_by: 'relevance',
-    page: 1
-  })
+  // External Apply Handoff Modal State & Feedback Notifications
+  const [handoffModalJob, setHandoffModalJob] = useState<any>(null)
+  const [feedbackToast, setFeedbackToast] = useState<string | null>(null)
+  const [errorToast, setErrorToast] = useState<string | null>(null)
 
-  // Selected job for sticky right-pane details view
+  // Selected job local object for sticky right-pane details view
   const [selectedJob, setSelectedJob] = useState<any>(null)
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
+
+  const handleSetSelectedJob = (job: any) => {
+    setSelectedJob(job)
+    setSelectedJobId(job ? job.id : null)
+  }
 
   // ─── DATA FETCHING ────────────────────────────────────────────────────────
   // 1. Fetch latest resume/profile status
@@ -83,7 +100,34 @@ export default function JobsPage() {
     retry: false
   })
 
-  // 2. Fetch live job discovery — strictly enabled ONLY after user clicks Search
+  // 2. Fetch user applications list to correlate real-time job application states
+  const { data: userApplications } = useQuery({
+    queryKey: ['applicationsList'],
+    queryFn: async () => {
+      const res = await applicationsApi.list()
+      return res.data
+    }
+  })
+
+  // Helper to determine exact application status for any job
+  const getJobApplicationStatus = (job: any) => {
+    if (!job || !userApplications || !Array.isArray(userApplications)) return null
+    const found = userApplications.find(
+      (app: any) => app.company_name?.trim().toLowerCase() === job.company_name?.trim().toLowerCase() &&
+                    app.role_title?.trim().toLowerCase() === job.title?.trim().toLowerCase()
+    )
+    return found ? found.status : null
+  }
+
+  const getJobApplicationRecord = (job: any) => {
+    if (!job || !userApplications || !Array.isArray(userApplications)) return null
+    return userApplications.find(
+      (app: any) => app.company_name?.trim().toLowerCase() === job.company_name?.trim().toLowerCase() &&
+                    app.role_title?.trim().toLowerCase() === job.title?.trim().toLowerCase()
+    )
+  }
+
+  // 3. Fetch live job discovery — strictly enabled ONLY after user clicks Search
   const { data: discoveryData, isLoading: isJobsLoading, isError, error, refetch } = useQuery({
     queryKey: ['discoveredJobs', searchParams],
     queryFn: async () => {
@@ -102,25 +146,28 @@ export default function JobsPage() {
       })
       return res.data
     },
-    enabled: hasSearched, // Prevents firing API calls until user explicitly submits a search query
-    staleTime: 1000 * 60 * 15, // Keeps results cached when switching tabs
-    gcTime: 1000 * 60 * 30, // Persists query cache across unmounts
+    enabled: hasSearched,
+    staleTime: 1000 * 60 * 15,
+    gcTime: 1000 * 60 * 30,
     retry: false
   })
 
-  // Auto-select first job on load
+  // Auto-select first job on load or restore selected job from navigation store
   useEffect(() => {
     if (discoveryData?.jobs?.length > 0) {
-      const stillExists = discoveryData.jobs.find((j: any) => j.id === selectedJob?.id)
-      if (!stillExists) {
-        setSelectedJob(discoveryData.jobs[0])
+      const targetId = selectedJobId !== null ? selectedJobId : selectedJob?.id
+      const found = discoveryData.jobs.find((j: any) => j.id === targetId)
+      if (found) {
+        setSelectedJob(found)
       } else {
-        setSelectedJob(stillExists)
+        setSelectedJob(discoveryData.jobs[0])
+        setSelectedJobId(discoveryData.jobs[0].id)
       }
     } else {
       setSelectedJob(null)
+      setSelectedJobId(null)
     }
-  }, [discoveryData])
+  }, [discoveryData, selectedJobId])
 
   // ─── MUTATIONS ────────────────────────────────────────────────────────────
   const trackJobMutation = useMutation({
@@ -145,17 +192,61 @@ export default function JobsPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['applicationsList'] })
       queryClient.invalidateQueries({ queryKey: ['analyticsDashboard'] })
-      alert(data.message || "Job tracked successfully!")
+      setFeedbackToast(data.message || "Job tracked successfully!")
+      setTimeout(() => setFeedbackToast(null), 4000)
     },
     onError: (err: any) => {
-      alert(`Error tracking job: ${err?.response?.data?.detail || err.message}`)
+      setErrorToast(`Error tracking job: ${err?.response?.data?.detail || err.message}`)
+      setTimeout(() => setErrorToast(null), 4000)
     }
   })
+
+  const confirmApplyMutation = useMutation({
+    mutationFn: async (job: any) => {
+      const res = await jobsApi.confirmApply({
+        id: job.id,
+        title: job.title,
+        company_name: job.company_name,
+        company_industry: job.company_industry,
+        company_website: job.company_website,
+        description: job.description,
+        requirements: (job.matched_skills || []).concat(job.missing_skills || []),
+        location: job.location,
+        experience: job.experience,
+        job_type: job.job_type,
+        remote_onsite: job.remote_onsite,
+        salary_range: job.salary_range,
+        external_apply_url: job.external_apply_url
+      })
+      return res.data
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['applicationsList'] })
+      queryClient.invalidateQueries({ queryKey: ['analyticsDashboard'] })
+      setHandoffModalJob(null)
+      setFeedbackToast("Application tracked — ACE recorded this application based on your confirmation.")
+      setTimeout(() => setFeedbackToast(null), 5000)
+    },
+    onError: (err: any) => {
+      setErrorToast(`Error recording confirmation: ${err?.response?.data?.detail || err.message}`)
+      setTimeout(() => setErrorToast(null), 5000)
+    }
+  })
+
+  const handleInitiateApply = (job: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    if (!job.external_apply_url || !job.external_apply_url.trim().startsWith('http')) {
+      setErrorToast("Application link unavailable: ACE cannot open an external application page for this position.")
+      setTimeout(() => setErrorToast(null), 5000)
+      return
+    }
+    setHandoffModalJob(job)
+  }
 
   const handleSearch = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     setHasSearched(true)
-    setSearchParams({
+    setJobSearchParams({
       keyword,
       location,
       role,
@@ -164,77 +255,43 @@ export default function JobsPage() {
       remote_onsite: remoteOnsite,
       skills,
       salary_min: salaryMin,
-      sort_by: sortBy,
       page: 1
     })
-    setPage(1)
     setSearchProgress(0)
     setShowProgress(true)
   }
 
   const handleReset = () => {
-    setKeyword('')
-    setLocation('')
-    setRole('')
-    setJobType('')
-    setExperience('')
-    setRemoteOnsite('')
-    setSkills('')
-    setSalaryMin('')
-    setSortBy('relevance')
-    setPage(1)
-    setHasSearched(false)
+    resetJobsState()
     setShowProgress(false)
     setSearchProgress(0)
-    setSearchParams({
-      keyword: '',
-      location: '',
-      role: '',
-      job_type: '',
-      experience: '',
-      remote_onsite: '',
-      skills: '',
-      salary_min: '',
-      sort_by: 'relevance',
-      page: 1
-    })
+    setSelectedJob(null)
   }
 
   const removeFilter = (key: string) => {
-    if (key === 'keyword') setKeyword('')
-    if (key === 'location') setLocation('')
-    if (key === 'role') setRole('')
-    if (key === 'job_type') setJobType('')
-    if (key === 'experience') setExperience('')
-    if (key === 'remote_onsite') setRemoteOnsite('')
-    if (key === 'skills') setSkills('')
-    if (key === 'salary_min') setSalaryMin('')
-    
-    setSearchParams(prev => ({ ...prev, [key]: '', page: 1 }))
+    setJobInputs({ [key]: '' })
+    setJobSearchParams({ [key]: '', page: 1 })
   }
 
   const handlePageChange = (newPage: number) => {
-    setPage(newPage)
-    setSearchParams(prev => ({ ...prev, page: newPage }))
+    setJobSearchParams({ page: newPage })
     setSearchProgress(0)
     setShowProgress(true)
   }
 
-  // Matching badge styling
+  // Matching badge styling — ACE Green Semantic System
+  // LOW (0–39%): light green | MEDIUM (40–69%): medium green | HIGH (70–100%): dark green
   const getMatchBadgeStyle = (score: number | null) => {
     if (score === null || score === undefined) {
-      return { bg: 'bg-slate-100', text: 'text-slate-600', label: 'No Profile' }
+      return { bg: 'bg-[#E3EFD3]/60', text: 'text-[#4E6243]', label: 'No Profile', level: 'none' }
     }
     if (score < 40) {
-      return { bg: 'bg-[#E3EFD3]', text: 'text-[#336659]', label: 'Low Fit' }
+      return { bg: 'bg-[#E3EFD3]', text: 'text-[#4E6243]', label: 'Low Fit', level: 'low' }
     }
     if (score < 70) {
-      return { bg: 'bg-[#AEC3B0]', text: 'text-[#0D2B1D]', label: 'Moderate Fit' }
+      return { bg: 'bg-[#AEC3B0]', text: 'text-[#0D2B1D]', label: 'Moderate Fit', level: 'medium' }
     }
-    if (score < 85) {
-      return { bg: 'bg-[#234F45]', text: 'text-white', label: 'High Fit' }
-    }
-    return { bg: 'bg-[#0D2B1D]', text: 'text-white', label: 'Exceptional Fit' }
+    return { bg: 'bg-[#234F45]', text: 'text-white', label: 'High Fit', level: 'high' }
   }
 
   // Progress bar animation effect
@@ -337,19 +394,7 @@ export default function JobsPage() {
             />
           </div>
 
-          <div className="hidden md:block w-px h-8 bg-[#AEC3B0]/40 mx-2" />
 
-          {/* Location Input */}
-          <div className="hidden md:flex relative w-64 items-center px-3 py-1">
-            <MapPin className="text-[#336659] flex-shrink-0 mr-2.5" size={18} />
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="City or 'Remote'..."
-              className="w-full bg-transparent text-sm font-semibold text-[#0D2B1D] placeholder-[#334155]/50 outline-none border-none focus:outline-none focus:ring-0"
-            />
-          </div>
 
           {/* Embedded Search Button inside Pill */}
           <Button
@@ -369,8 +414,8 @@ export default function JobsPage() {
           </Button>
         </div>
 
-        {/* Filter Controls Row — Solid Green Pill Buttons */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5 px-1">
+        {/* Filter Controls Row — all in one line */}
+        <div className="flex flex-wrap items-center gap-2 px-1">
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={role}
@@ -432,25 +477,17 @@ export default function JobsPage() {
               <option value="1500000" className="bg-[#0D2B1D] text-white">15+ LPA</option>
               <option value="2000000" className="bg-[#0D2B1D] text-white">20+ LPA</option>
             </select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="bg-[#285A4F] hover:bg-[#1A3E36] text-white border-none rounded-xl px-3.5 py-2 text-xs font-bold outline-none cursor-pointer transition-all shadow-xs"
-            >
-              <option value="relevance" className="bg-[#0D2B1D] text-white">Sort: Most Relevant</option>
-              <option value="date" className="bg-[#0D2B1D] text-white">Sort: Most Recent</option>
-            </select>
-
-            <button
-              type="button"
-              onClick={() => handleSearch()}
-              className="px-4 py-2 bg-[#285A4F] hover:bg-[#1A3E36] text-white font-bold text-xs rounded-xl transition-all shadow-xs flex items-center gap-1.5"
-            >
-              <Filter size={13} /> Apply
-            </button>
+            {/* Location input — same row as other filters */}
+            <div className="relative flex items-center bg-[#285A4F] hover:bg-[#1A3E36] transition-all rounded-xl px-3.5 py-2 gap-2 shadow-xs">
+              <MapPin className="text-white flex-shrink-0" size={13} />
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="Location..."
+                className="bg-transparent text-white text-xs font-bold placeholder:text-white placeholder:opacity-100 outline-none border-none focus:outline-none focus:ring-0 w-24"
+              />
+            </div>
           </div>
         </div>
 
@@ -568,7 +605,7 @@ export default function JobsPage() {
                 return (
                   <div
                     key={job.id}
-                    onClick={() => setSelectedJob(job)}
+                    onClick={() => { handleSetSelectedJob(job); setIsDescriptionExpanded(false); }}
                     className={`p-5 rounded-2xl border transition-all duration-200 cursor-pointer relative overflow-hidden bg-white shadow-xs ${
                       isSelected
                         ? 'border-[#336659] ring-2 ring-[#336659]/20 shadow-md'
@@ -587,9 +624,11 @@ export default function JobsPage() {
                             {job.title}
                           </h3>
                           
-                          <Badge className={`${badge.bg} ${badge.text} border-none font-bold text-3xs py-0.5 px-2 flex-shrink-0 rounded-md`}>
-                            {job.match_score !== null ? `${Math.round(job.match_score)}% FIT` : 'NO PROFILE'}
-                          </Badge>
+                          <span className={`${badge.bg} ${badge.text} border-none font-extrabold text-[10px] py-0.5 px-2.5 flex-shrink-0 rounded-lg inline-flex items-center gap-1 tracking-wide`}>
+                            {job.match_score !== null ? (
+                              <>{Math.round(job.match_score)}%<span className="font-semibold opacity-80 text-[9px]">FIT</span></>
+                            ) : 'N/A'}
+                          </span>
                         </div>
 
                         <p className="text-xs font-bold text-[#336659]">
@@ -640,15 +679,27 @@ export default function JobsPage() {
                         >
                           View Details
                         </button>
-                        <a
-                          href={job.external_apply_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="px-4 py-1.5 bg-[#285A4F] hover:bg-[#1A3E36] text-white text-xs font-bold rounded-lg flex items-center gap-1 transition-colors shadow-xs"
-                        >
-                          Apply <ArrowUpRight size={13} />
-                        </a>
+                        {getJobApplicationStatus(job) === 'applied' ? (
+                          <span className="px-3.5 py-1.5 bg-[#234F45] text-white text-xs font-extrabold rounded-lg flex items-center gap-1 shadow-xs">
+                            <CheckCircle size={13} /> ✓ Applied
+                          </span>
+                        ) : getJobApplicationStatus(job) === 'tracked' ? (
+                          <button
+                            type="button"
+                            onClick={(e) => handleInitiateApply(job, e)}
+                            className="px-3.5 py-1.5 bg-[#E3EFD3] text-[#336659] hover:bg-[#336659] hover:text-white text-xs font-extrabold rounded-lg flex items-center gap-1 transition-colors shadow-xs"
+                          >
+                            Apply <ArrowUpRight size={13} />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => handleInitiateApply(job, e)}
+                            className="px-4 py-1.5 bg-[#285A4F] hover:bg-[#1A3E36] text-white text-xs font-bold rounded-lg flex items-center gap-1 transition-colors shadow-xs"
+                          >
+                            Apply <ArrowUpRight size={13} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -708,30 +759,46 @@ export default function JobsPage() {
                 </div>
 
                 {selectedJob.match_score !== null && (
-                  <Badge className={`${getMatchBadgeStyle(selectedJob.match_score).bg} ${getMatchBadgeStyle(selectedJob.match_score).text} font-extrabold px-2.5 py-1 text-xs border-none rounded-md flex-shrink-0`}>
-                    {Math.round(selectedJob.match_score)}% FIT
-                  </Badge>
+                  <div className={`${getMatchBadgeStyle(selectedJob.match_score).bg} ${getMatchBadgeStyle(selectedJob.match_score).text} font-extrabold px-3 py-1.5 text-sm border-none rounded-xl flex-shrink-0 flex items-center gap-1.5 shadow-sm`}>
+                    <span className="text-base leading-none">{Math.round(selectedJob.match_score)}%</span>
+                    <span className="text-[10px] font-bold opacity-80 uppercase">Fit</span>
+                  </div>
                 )}
               </div>
 
               {/* Primary Actions */}
               <div className="flex gap-2.5">
-                <a
-                  href={selectedJob.external_apply_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 bg-[#285A4F] hover:bg-[#1A3E36] text-white font-bold py-2.5 rounded-xl flex items-center justify-center gap-1.5 text-center text-xs transition-colors shadow-xs"
-                >
-                  Apply Now <ArrowUpRight size={13} />
-                </a>
-                <Button
-                  variant="secondary"
-                  className="border-[#336659]/30 text-[#336659] hover:bg-[#E3EFD3] font-bold py-2.5 px-4 rounded-xl flex items-center gap-1.5 text-xs"
-                  loading={trackJobMutation.isPending}
-                  onClick={() => trackJobMutation.mutate(selectedJob)}
-                >
-                  <Target size={14} /> Track Opp
-                </Button>
+                {getJobApplicationStatus(selectedJob) === 'applied' ? (
+                  <div className="flex-1 bg-[#234F45] text-white font-extrabold py-2.5 rounded-xl flex items-center justify-center gap-1.5 text-xs shadow-xs">
+                    <CheckCircle size={15} /> ✓ Applied
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => handleInitiateApply(selectedJob, e)}
+                    className="flex-1 bg-[#285A4F] hover:bg-[#1A3E36] text-white font-bold py-2.5 rounded-xl flex items-center justify-center gap-1.5 text-center text-xs transition-colors shadow-xs"
+                  >
+                    Apply <ArrowUpRight size={13} />
+                  </button>
+                )}
+                {getJobApplicationStatus(selectedJob) === 'applied' ? (
+                  <div className="bg-[#E3EFD3] text-[#0D2B1D] font-bold py-2.5 px-3 rounded-xl border border-[#336659]/20 text-xs flex items-center">
+                    Confirmed
+                  </div>
+                ) : getJobApplicationStatus(selectedJob) === 'tracked' ? (
+                  <div className="bg-[#E3EFD3] text-[#336659] font-bold py-2.5 px-3 rounded-xl border border-[#336659]/20 text-xs flex items-center">
+                    ✓ Tracked
+                  </div>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    className="border-[#336659]/30 text-[#336659] hover:bg-[#E3EFD3] font-bold py-2.5 px-4 rounded-xl flex items-center gap-1.5 text-xs"
+                    loading={trackJobMutation.isPending}
+                    onClick={() => trackJobMutation.mutate(selectedJob)}
+                  >
+                    <Target size={14} /> Track Opp
+                  </Button>
+                )}
               </div>
 
               {/* Compensation Box */}
@@ -758,7 +825,7 @@ export default function JobsPage() {
                     <Sparkles size={14} className="text-[#336659]" /> AI Compatibility Report
                   </h3>
                   
-                  <div className="p-4 bg-[#FAF9F6] border border-[#AEC3B0]/60 rounded-xl space-y-3">
+                  <div className="p-4 bg-[#FAF9F6] border border-[#AEC3B0]/40 rounded-xl space-y-3">
                     <div className="flex justify-between items-end text-xs font-bold text-[#0D2B1D]">
                       <span>NLP Semantic Vector Coverage</span>
                       <span className="text-[#336659]">{Math.round(selectedJob.match_score)}%</span>
@@ -781,32 +848,40 @@ export default function JobsPage() {
                     </div>
                   </div>
 
-                  {/* Skills Mapping */}
+                  {/* Skills Mapping — ACE Green Semantic System */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="p-3 bg-[#E3EFD3]/50 border border-[#AEC3B0]/40 rounded-xl">
-                      <h4 className="text-3xs font-extrabold text-[#336659] uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                        <CheckCircle size={10} /> Matched Skills ({selectedJob.matched_skills?.length || 0})
+                    <div className="p-3.5 bg-[#E3EFD3]/40 border border-[#AEC3B0]/40 rounded-xl">
+                      <h4 className="text-[10px] font-extrabold text-[#336659] uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                        <CheckCircle size={11} /> Matched Skills ({selectedJob.matched_skills?.length || 0})
                       </h4>
-                      <div className="flex flex-wrap gap-1">
-                        {selectedJob.matched_skills?.map((sk: string, i: number) => (
-                          <Badge key={i} className="bg-[#E3EFD3] text-[#0D2B1D] text-3xs border-none font-bold">
-                            {sk}
-                          </Badge>
-                        ))}
-                      </div>
+                      {selectedJob.matched_skills?.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedJob.matched_skills.map((sk: string, i: number) => (
+                            <span key={i} className="inline-flex items-center gap-1 bg-[#E3EFD3] text-[#0D2B1D] text-[10px] font-bold px-2 py-0.5 rounded-md">
+                              ✓ {sk}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-[#4E6243] font-medium italic">No exact skill matches detected</p>
+                      )}
                     </div>
 
-                    <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl">
-                      <h4 className="text-3xs font-extrabold text-amber-900 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                        <AlertTriangle size={10} /> Recommended ({selectedJob.missing_skills?.length || 0})
+                    <div className="p-3.5 bg-[#AEC3B0]/15 border border-[#336659]/15 rounded-xl">
+                      <h4 className="text-[10px] font-extrabold text-[#234F45] uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                        <TrendingUp size={11} /> Recommended ({selectedJob.missing_skills?.length || 0})
                       </h4>
-                      <div className="flex flex-wrap gap-1">
-                        {selectedJob.missing_skills?.map((sk: string, i: number) => (
-                          <Badge key={i} className="bg-amber-500/10 text-amber-900 text-3xs border-none font-bold">
-                            {sk}
-                          </Badge>
-                        ))}
-                      </div>
+                      {selectedJob.missing_skills?.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedJob.missing_skills.map((sk: string, i: number) => (
+                            <span key={i} className="inline-flex items-center bg-[#AEC3B0]/30 text-[#0D2B1D] text-[10px] font-bold px-2 py-0.5 rounded-md border border-[#336659]/15">
+                              {sk}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-[#4E6243] font-medium italic">No additional skills recommended</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -817,33 +892,56 @@ export default function JobsPage() {
                 </div>
               )}
 
-              {/* Complete Job Description Section */}
+              {/* Complete Job Description — Progressive Disclosure */}
               <div className="space-y-2">
-                <h3 className="text-xs uppercase font-extrabold tracking-wider text-[#0D2B1D]">
-                  Complete Job Description
-                </h3>
-                <p className="text-xs text-[#1e293b] leading-relaxed font-medium whitespace-pre-line bg-[#FAF9F6] p-4 rounded-xl border border-[#AEC3B0]/40 max-h-60 overflow-y-auto custom-scrollbar">
-                  {selectedJob.description}
-                </p>
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs uppercase font-extrabold tracking-wider text-[#0D2B1D]">
+                    Job Description
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                    className="text-[10px] font-bold text-[#336659] hover:text-[#234F45] flex items-center gap-1 transition-colors"
+                  >
+                    {isDescriptionExpanded ? (
+                      <><ChevronUp size={12} /> Collapse</>
+                    ) : (
+                      <><ChevronDown size={12} /> Show full description</>
+                    )}
+                  </button>
+                </div>
+                <div className="relative">
+                  <div
+                    className={`text-xs text-[#1e293b] leading-relaxed font-medium whitespace-pre-line bg-[#FAF9F6] p-4 rounded-xl border border-[#AEC3B0]/40 overflow-hidden transition-all duration-300 ${
+                      isDescriptionExpanded ? 'max-h-[600px] overflow-y-auto' : 'max-h-32'
+                    }`}
+                  >
+                    {selectedJob.description}
+                  </div>
+                  {!isDescriptionExpanded && (
+                    <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-[#FAF9F6] to-transparent rounded-b-xl pointer-events-none" />
+                  )}
+                </div>
               </div>
 
-              {/* AI Recommended Next Step */}
-              <div className="flex items-center justify-between p-3.5 bg-[#FAF9F6] border border-[#AEC3B0]/60 rounded-xl">
-                <div className="flex items-center gap-2">
-                  <Lightbulb size={16} className="text-[#336659]" />
-                  <div className="text-2xs">
-                    <p className="font-bold text-[#0D2B1D]">Bridge missing skill requirements</p>
-                    <p className="text-[#334155] font-semibold mt-0.5">Explore custom study roadmaps for this role.</p>
+              {/* AI Recommended Next Step — Roadmap Bridge CTA */}
+              <div className="flex items-center justify-between p-4 bg-gradient-to-r from-[#E3EFD3]/40 to-[#AEC3B0]/20 border border-[#336659]/15 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#336659]/10 flex items-center justify-center flex-shrink-0">
+                    <Lightbulb size={16} className="text-[#336659]" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-[#0D2B1D]">Bridge missing skill requirements</p>
+                    <p className="text-[10px] text-[#4E6243] font-medium mt-0.5">Explore custom study roadmaps for this role.</p>
                   </div>
                 </div>
-                <Button
-                  size="xs"
-                  variant="secondary"
-                  className="text-3xs font-extrabold flex items-center gap-0.5 border-[#336659]/30 text-[#336659]"
+                <button
+                  type="button"
                   onClick={() => navigate('/skills')}
+                  className="text-[11px] font-extrabold text-[#336659] hover:text-[#0D2B1D] flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-[#E3EFD3]/60 transition-colors flex-shrink-0"
                 >
-                  Roadmap <ArrowRight size={10} />
-                </Button>
+                  Skill Roadmap <ArrowRight size={12} />
+                </button>
               </div>
 
             </Card>
@@ -857,6 +955,97 @@ export default function JobsPage() {
           )}
         </div>
       </div>
+
+      {/* ─── EXTERNAL APPLICATION HANDOFF MODAL ────────────────────────────── */}
+      {handoffModalJob && (
+        <div 
+          tabIndex={-1}
+          onKeyDown={(e) => { if (e.key === 'Escape') setHandoffModalJob(null) }}
+          className="fixed inset-0 bg-[#0D2B1D]/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in"
+        >
+          <div className="bg-white border border-[#AEC3B0] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-5 relative animate-scale-up">
+            <button
+              type="button"
+              onClick={() => setHandoffModalJob(null)}
+              className="absolute top-4 right-4 text-[#334155] hover:text-[#0D2B1D] p-1 rounded-lg hover:bg-[#E3EFD3] transition-colors"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold tracking-wider uppercase text-[#336659] bg-[#E3EFD3] px-2.5 py-0.5 rounded-md inline-block">
+                External Application Handoff
+              </span>
+              <h2 className="text-lg font-extrabold text-[#0D2B1D] leading-snug">
+                Apply to {handoffModalJob.title}
+              </h2>
+              <p className="text-xs font-bold text-[#336659]">{handoffModalJob.company_name}</p>
+            </div>
+
+            <div className="p-4 bg-[#FAF9F6] border border-[#AEC3B0]/60 rounded-xl space-y-2 text-xs text-[#1e293b] font-medium leading-relaxed">
+              <p>
+                You're being redirected to the external application page for this position.
+              </p>
+              <p className="text-[#4E6243] font-semibold text-[11px]">
+                ACE can't verify whether the application was submitted on the external site.
+              </p>
+            </div>
+
+            <div className="pt-1">
+              <a
+                href={handoffModalJob.external_apply_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3 bg-[#285A4F] hover:bg-[#1A3E36] text-white font-extrabold rounded-xl flex items-center justify-center gap-2 text-xs shadow-sm transition-all"
+              >
+                Open Application <ArrowUpRight size={15} />
+              </a>
+            </div>
+
+            <div className="pt-2 border-t border-[#E3EFD3] space-y-2">
+              <p className="text-[11px] font-bold text-[#0D2B1D] text-center">After you finish applying:</p>
+              <div className="flex gap-2.5">
+                <Button
+                  className="flex-1 bg-[#234F45] hover:bg-[#0D2B1D] text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs"
+                  loading={confirmApplyMutation.isPending}
+                  onClick={() => confirmApplyMutation.mutate(handoffModalJob)}
+                >
+                  <CheckCircle size={14} /> ✓ I Applied
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="border-[#AEC3B0] text-[#334155] hover:bg-[#FAF9F6] font-bold py-2.5 px-4 rounded-xl text-xs"
+                  onClick={() => setHandoffModalJob(null)}
+                >
+                  Not Yet
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feedback Toast */}
+      {feedbackToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#0D2B1D] text-white border border-[#10B981]/40 rounded-2xl p-4 shadow-xl flex items-center gap-3 text-xs font-bold max-w-sm animate-slide-up">
+          <CheckCircle className="text-[#10B981] flex-shrink-0" size={20} />
+          <span>{feedbackToast}</span>
+          <button onClick={() => setFeedbackToast(null)} className="ml-auto text-white/60 hover:text-white">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Error Toast */}
+      {errorToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-rose-900 text-white border border-rose-500/40 rounded-2xl p-4 shadow-xl flex items-center gap-3 text-xs font-bold max-w-sm animate-slide-up">
+          <AlertTriangle className="text-rose-300 flex-shrink-0" size={20} />
+          <span>{errorToast}</span>
+          <button onClick={() => setErrorToast(null)} className="ml-auto text-white/60 hover:text-white">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
     </div>
   )

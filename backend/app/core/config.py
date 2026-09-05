@@ -27,7 +27,9 @@ class Settings(BaseSettings):
     @classmethod
     def validate_secret_key(cls, v: str) -> str:
         env = os.environ.get("ENVIRONMENT", "development").lower()
-        if env == "production" or os.environ.get("NODE_ENV") == "production":
+        node_env = os.environ.get("NODE_ENV", "").lower()
+        is_production = env in ("production", "prod") or node_env in ("production", "prod") or (env not in ("development", "dev", "test", "testing") and node_env not in ("development", "dev", "test", "testing"))
+        if is_production:
             if not v or v == "SUPER_SECRET_SECURITY_KEY_CHANGE_ME_IN_PRODUCTION":
                 raise ValueError("SECRET_KEY must be changed in a production environment!")
         return v
@@ -38,7 +40,7 @@ class Settings(BaseSettings):
     ] = ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"]
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ace"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:pavan@localhost:5432/ace"
     
     # AI Keys
     GEMINI_API_KEY: str = ""

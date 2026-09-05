@@ -25,8 +25,9 @@ import {
 
 // Define the Kanban columns matching the backend status mapping
 const COLUMNS = [
+  { id: 'tracked', label: 'Tracked', color: 'border-t-[#336659]' },
   { id: 'applied', label: 'Applied', color: 'border-t-brand-primary' },
-  { id: 'interviewing', label: 'Interviewing', color: 'border-t-[#0891B2]' },
+  { id: 'interview', label: 'Interviewing', color: 'border-t-[#0891B2]' },
   { id: 'offer', label: 'Offer', color: 'border-t-success' },
   { id: 'rejected', label: 'Rejected', color: 'border-t-danger' }
 ]
@@ -40,13 +41,13 @@ export default function ApplicationsPage() {
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null)
   
   // Mobile active tab filter
-  const [mobileTab, setMobileTab] = useState<'all' | 'applied' | 'interviewing' | 'offer' | 'rejected'>('all')
+  const [mobileTab, setMobileTab] = useState<string>('all')
 
   // Form states for creating a new application
   const [newCompany, setNewCompany] = useState('')
   const [newRole, setNewRole] = useState('')
   const [newJdText, setNewJdText] = useState('')
-  const [newStatus, setNewStatus] = useState('applied')
+  const [newStatus, setNewStatus] = useState('tracked')
 
   // 1. Fetch live applications list from database
   const { data: applications, isLoading } = useQuery({
@@ -116,9 +117,10 @@ export default function ApplicationsPage() {
 
   // Counts for summary metrics header
   const totalCount = applications?.length || 0
-  const counts = {
+  const counts: Record<string, number> = {
+    tracked: applications?.filter((app: any) => app.status === 'tracked').length || 0,
     applied: applications?.filter((app: any) => app.status === 'applied').length || 0,
-    interviewing: applications?.filter((app: any) => app.status === 'interviewing').length || 0,
+    interview: applications?.filter((app: any) => app.status === 'interview' || app.status === 'interviewing').length || 0,
     offer: applications?.filter((app: any) => app.status === 'offer').length || 0,
     rejected: applications?.filter((app: any) => app.status === 'rejected').length || 0
   }
@@ -278,8 +280,9 @@ export default function ApplicationsPage() {
                   onChange={(e) => updateStatusMutation.mutate({ id: activeApp.id, status: e.target.value })}
                   className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-lg px-2 py-1.5 outline-none font-bold"
                 >
-                  <option value="applied">Applied</option>
-                  <option value="interviewing">Interviewing</option>
+                  <option value="tracked">Tracked</option>
+                  <option value="applied">Applied (Confirmed)</option>
+                  <option value="interview">Interviewing</option>
                   <option value="offer">Offer</option>
                   <option value="rejected">Rejected</option>
                 </select>
@@ -395,8 +398,9 @@ export default function ApplicationsPage() {
                   onChange={(e) => setNewStatus(e.target.value)}
                   className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-transparent rounded-lg p-2.5 outline-none"
                 >
-                  <option value="applied">Applied</option>
-                  <option value="interviewing">Interviewing</option>
+                  <option value="tracked">Tracked</option>
+                  <option value="applied">Applied (Confirmed)</option>
+                  <option value="interview">Interviewing</option>
                   <option value="offer">Offer</option>
                   <option value="rejected">Rejected</option>
                 </select>

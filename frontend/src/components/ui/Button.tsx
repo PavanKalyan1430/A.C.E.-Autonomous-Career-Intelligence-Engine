@@ -6,6 +6,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: React.ReactNode
   iconRight?: React.ReactNode
   loading?: boolean
+  isLoading?: boolean
   fullWidth?: boolean
 }
 
@@ -15,12 +16,15 @@ export const Button: React.FC<ButtonProps> = ({
   size = 'md',
   icon,
   iconRight,
-  loading = false,
+  loading,
+  isLoading,
   fullWidth = false,
   className = '',
   disabled,
   ...props
 }) => {
+  const isBtnLoading = Boolean(loading || isLoading)
+
   const base = [
     'inline-flex items-center justify-center font-medium rounded-lg',
     'transition-all duration-150 focus-visible:ring-2 focus-visible:ring-brand-blue/30 focus-visible:outline-none',
@@ -45,10 +49,10 @@ export const Button: React.FC<ButtonProps> = ({
   return (
     <button
       className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
-      disabled={disabled || loading}
+      disabled={disabled || isBtnLoading}
       {...props}
     >
-      {loading ? (
+      {isBtnLoading ? (
         <svg className="animate-spin h-4 w-4 flex-shrink-0" viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />

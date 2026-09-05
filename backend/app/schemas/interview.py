@@ -3,10 +3,42 @@ from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Any, Optional
 
 class InterviewStartRequest(BaseModel):
-    role_title: str = Field(description="Target job role e.g. 'Backend Engineer'")
+    role_title: str = Field(..., description="Target job role e.g. 'Backend Engineer'")
     company_name: Optional[str] = Field(default=None, description="Optional target company name e.g. 'Google'")
     tech_stack_or_jd: Optional[str] = Field(default=None, description="Optional tech stack or full job description text")
     difficulty: Optional[str] = Field(default="Medium", description="Selected difficulty level: Easy, Medium, or Hard")
+    experience_level: Optional[str] = Field(default="Entry Level", description="Experience level: Student / Intern, Entry Level, Mid Level, Senior Level")
+    num_questions: Optional[int] = Field(default=3, description="Number of questions to ask, e.g., 3, 5, or 10")
+
+
+    @field_validator("role_title")
+    @classmethod
+    def validate_role_title(cls, v: str) -> str:
+        s = v.strip()
+        if not s:
+            raise ValueError("role_title must not be empty or whitespace only.")
+        return s
+
+    @field_validator("company_name", "tech_stack_or_jd", mode="before")
+    @classmethod
+    def normalize_empty_strings(cls, v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            s = v.strip()
+            return s if s else None
+        return v
+
+    @field_validator("difficulty", mode="before")
+    @classmethod
+    def normalize_difficulty(cls, v: Any) -> str:
+        if not v or not isinstance(v, str) or not v.strip():
+            return "Medium"
+        cap = v.strip().capitalize()
+        if cap not in ["Easy", "Medium", "Hard"]:
+            return "Medium"
+        return cap
+
 
 class InterviewStartResponse(BaseModel):
     session_id: int

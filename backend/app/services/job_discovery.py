@@ -419,9 +419,11 @@ class JobDiscoveryService:
             user_id=current_user.id,
             company_name=company.name,
             role_title=job_data.get("title"),
-            status=ApplicationStatus.APPLIED.value,
+            status=ApplicationStatus.TRACKED.value,
             jd_text=jd_text,
-            analysis=analysis_data
+            analysis=analysis_data,
+            external_apply_url=job_data.get("external_apply_url") or "",
+            location=job_data.get("location") or "Remote"
         )
         
         db.add(app_record)

@@ -70,6 +70,7 @@ export const OpportunitiesSection: React.FC<OpportunitiesSectionProps> = ({
                   recommendation={imp.recommendation}
                   impact={imp.impact || imp.importance}
                   whyItMatters={imp.why_it_matters}
+                  potentialPts={imp.potential_pts}
                   onTakeAction={() => navigate('/skills')}
                 />
               ))}

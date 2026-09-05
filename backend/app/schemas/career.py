@@ -10,7 +10,7 @@ class CanonicalCandidateProfile(BaseModel):
     experience_summary: List[Dict[str, Any]]
     weak_areas: List[str]
     interview_history_count: int
-    average_interview_score: float
+    average_interview_score: Optional[float] = None
 
 class SkillAlignment(BaseModel):
     target_role: str
@@ -27,12 +27,15 @@ class PrioritizedSkillGap(BaseModel):
 
 class LearningRoadmapNode(BaseModel):
     id: str
+    node_id: Optional[int] = None
+    skill_id: Optional[str] = None
     name: str
     status: str  # "completed", "focus", "recommended", "blocked"
     impact: str  # "high", "medium"
     prerequisites: List[Any]
     reason: str
-    estimated_effort_hours: int
+    estimated_effort_hours: Optional[int] = None
+    phase: int = 1
 
 class RecommendationProvenanceItem(BaseModel):
     title: str
@@ -48,3 +51,7 @@ class CareerIntelligenceResponse(BaseModel):
     learning_roadmap: List[LearningRoadmapNode]
     recommendations: List[RecommendationProvenanceItem]
     ai_synthesis: Optional[str] = None
+    readiness_score: Optional[float] = None
+    learning_completion_pct: Optional[float] = None
+    next_best_action: Optional[Dict[str, Any]] = None
+

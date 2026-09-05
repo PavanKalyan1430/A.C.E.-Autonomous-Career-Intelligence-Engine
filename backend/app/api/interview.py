@@ -44,9 +44,9 @@ class InMemoryRateLimiter:
         self.history[user_id].append(now)
         return False
 
-# Segregated rate limiters
-text_limiter = InMemoryRateLimiter(requests_limit=15, window_seconds=60.0)
-audio_limiter = InMemoryRateLimiter(requests_limit=10, window_seconds=60.0)
+# Segregated rate limiters (increased for fluid development/usage)
+text_limiter = InMemoryRateLimiter(requests_limit=60, window_seconds=60.0)
+audio_limiter = InMemoryRateLimiter(requests_limit=30, window_seconds=60.0)
 
 async def check_rate_limit_text(current_user: User = Depends(get_current_user)):
     if not settings.RATE_LIMIT_ENABLED:
@@ -89,27 +89,35 @@ async def start_interview_session(
     db: AsyncSession = Depends(get_db)
 ):
     tech_context = payload.tech_stack_or_jd or f"{payload.role_title} engineering domain"
+    difficulty = payload.difficulty or "Medium"
+    exp_level = payload.experience_level or "Entry Level"
+    num_questions = payload.num_questions or 3
     
     t0 = time.time()
     # Generate dynamic questions via LLM
     questions_json_str = await generate_interview_questions_tool.ainvoke({
         "role_title": payload.role_title,
         "tech_stack_or_jd": tech_context,
-        "difficulty": payload.difficulty or "Medium"
+        "difficulty": difficulty,
+        "experience_level": exp_level,
+        "num_questions": num_questions,
+        "company_name": payload.company_name
     })
+
     llm_latency = round(time.time() - t0, 3)
     logger.info(f"LLM question generation latency: {llm_latency}s")
     
     try:
         q_data = json.loads(questions_json_str)
         questions = q_data.get("questions", [])
-    except Exception:
-        keyphrases = production_nlp_service.extract_tfidf_keyphrases(tech_context, top_n=2)
-        top_skills = [kp["keyphrase"] for kp in keyphrases] if keyphrases else [payload.role_title]
-        questions = [
-            f"Explain how you design high-throughput system architecture utilizing {top_skills[0]}.",
-            f"Describe how you handle concurrency, trade-offs, and fault-tolerance in {payload.role_title} production environments."
-        ]
+        if not questions or not isinstance(questions, list) or len(questions) == 0:
+            raise ValueError("No valid questions returned from generation tool")
+    except Exception as e:
+        logger.error(f"Failed to generate interview questions via LLM: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to generate dynamic interview questions from LLM. Please try again."
+        )
 
     session = InterviewSession(
         user_id=current_user.id,
@@ -118,9 +126,10 @@ async def start_interview_session(
         questions=questions,
         current_question_index=0,
         transcript=[],
-        feedback={},
+        feedback={"difficulty": difficulty, "experience_level": exp_level},
         is_completed=False
     )
+
     db.add(session)
     await db.commit()
     await db.refresh(session)
@@ -132,6 +141,7 @@ async def start_interview_session(
         questions=session.questions,
         created_at=session.created_at
     )
+
 
 @router.post("/submit-answer", response_model=AnswerSubmitResponse, dependencies=[Depends(check_rate_limit_text)])
 async def submit_interview_answer(
@@ -253,17 +263,41 @@ async def submit_interview_answer(
     # --- DATABASE TRANSACTION FULLY RELEASED ---
 
     # 4. Invoke LLM Evaluation outside Postgres transaction context
+    session_difficulty = "Medium"
+    session_exp = "Entry Level"
+    if isinstance(session.feedback, dict):
+        if session.feedback.get("difficulty"):
+            session_difficulty = session.feedback.get("difficulty")
+        if session.feedback.get("experience_level"):
+            session_exp = session.feedback.get("experience_level")
+
     t_llm = time.time()
     llm_error = None
     eval_res_json = None
-    try:
-        eval_res_json = await evaluate_star_interview_tool.ainvoke({
-            "question": authoritative_question,
-            "user_answer": answer_text
+    
+    if answer_text == "Skipped by candidate (No response provided)":
+        eval_res_json = json.dumps({
+            "technical_score": 0,
+            "strengths": "None",
+            "weaknesses": "Question was skipped by candidate.",
+            "star_coverage_assessment": "No response provided.",
+            "improvement_suggestions": ["Review the core concepts related to this topic."]
         })
-    except Exception as e:
-        llm_error = f"LLM evaluation failed: {e}"
-        logger.error(llm_error)
+    else:
+        try:
+            eval_res_json = await evaluate_star_interview_tool.ainvoke({
+                "question": authoritative_question,
+                "user_answer": answer_text,
+                "role_title": session.role_title,
+                "difficulty": session_difficulty,
+                "experience_level": session_exp
+            })
+        except Exception as e:
+            llm_error = f"LLM evaluation failed: {e}"
+            logger.error(llm_error)
+
+
+
     llm_latency = round(time.time() - t_llm, 3)
 
     # --- ACQUIRE FRESH TRANSACTION TO PERSIST RESULTS ---
@@ -474,6 +508,10 @@ async def finish_interview_session(
     session.feedback = {"overall_score": avg_score, "questions_answered": len(transcript)}
     
     areas_to_improve = []
+    
+    if avg_score > 0 and avg_score < 70.0:
+        areas_to_improve.append("Technical Accuracy & Depth")
+
     all_metrics = [m for entry in transcript for m in entry.get("metrics", [])]
     if not all_metrics:
         areas_to_improve.append("Quantifiable Metric Density")
@@ -481,9 +519,20 @@ async def finish_interview_session(
     all_fillers = [f for entry in transcript for f in entry.get("filler_words_found", [])]
     if all_fillers:
         areas_to_improve.append("Verbal Hesitation Ratio")
-        
-    if not areas_to_improve:
-        areas_to_improve.append("Depth of Architectural Trade-off Analysis")
+
+    all_wpm = [entry.get("wpm_pace") for entry in transcript if entry.get("wpm_pace") is not None]
+    if all_wpm:
+        avg_wpm = sum(all_wpm) / len(all_wpm)
+        if avg_wpm < 110 or avg_wpm > 180:
+            areas_to_improve.append("Speaking Pace & Delivery")
+    # Extract dynamic feedback suggestions from transcript evaluation results
+    for entry in transcript:
+        suggestions = entry.get("suggestions", [])
+        for surg in suggestions:
+            if surg and surg not in areas_to_improve:
+                areas_to_improve.append(surg)
+
+
 
     feedback_record = InterviewFeedback(
         user_id=current_user.id,

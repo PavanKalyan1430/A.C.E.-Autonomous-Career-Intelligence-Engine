@@ -63,6 +63,7 @@ export const ResumeIntelligenceDashboard: React.FC<ResumeIntelligenceDashboardPr
         executiveSummary={executiveSummary}
         categories={categories}
         analyzedAt={atsAnalysis?.analyzed_at}
+        previousScore={atsAnalysis?.previous_score}
         actionableImprovements={actionableImprovements}
         onSeeHow={handleSeeHow}
       />

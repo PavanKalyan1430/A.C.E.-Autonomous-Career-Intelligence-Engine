@@ -42,7 +42,7 @@ export default function ResumePage() {
   const uploadNewInputRef = useRef<HTMLInputElement>(null)
 
   const [dragActive, setDragActive] = useState(false)
-  const [activeTab, setActiveTab] = useState<'ats_categories' | 'evidence' | 'roadmap' | 'experience' | 'projects' | 'education' | 'parsed_resume'>('ats_categories')
+  const [activeTab, setActiveTab] = useState<'ats_categories' | 'evidence' | 'experience' | 'projects' | 'education' | 'parsed_resume'>('ats_categories')
   const [uploadError, setUploadError] = useState('')
   const [tempRole, setTempRole] = useState('')
   const [isEditingRole, setIsEditingRole] = useState(false)
@@ -672,6 +672,26 @@ export default function ResumePage() {
                   >
                     Retry Analysis
                   </Button>
+                </Card>
+              ) : isAnalyzing ? (
+                <Card className="p-10 text-center flex flex-col items-center justify-center border-brand-primary/30 bg-brand-light/10 min-h-[320px] animate-fade-in shadow-card">
+                  <div className="w-14 h-14 bg-brand-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-brand-primary/20">
+                    <Sparkles className="text-brand-primary animate-spin" size={28} />
+                  </div>
+                  <h3 className="font-bold text-base text-neutral-900 dark:text-white mb-2">
+                    Analyzing Resume for <span className="text-brand-primary">{effectiveRole}</span>...
+                  </h3>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-6 max-w-md">
+                    Running deep LLM & NLP analysis to extract ATS compatibility scores, skill alignment evidence, and candidate gap diagnostics.
+                  </p>
+                  <div className="w-full max-w-md mx-auto space-y-2">
+                    <div className="w-full bg-neutral-200 dark:bg-neutral-800 h-2.5 rounded-full overflow-hidden">
+                      <div className="bg-gradient-to-r from-[#12362b] via-[#336659] to-[#6B8F71] h-full animate-pulse w-3/4 rounded-full"></div>
+                    </div>
+                    <p className="text-[11px] font-semibold text-brand-primary dark:text-[#6B8F71] animate-pulse">
+                      Processing linguistic metrics, keyword evidence & prerequisite graph...
+                    </p>
+                  </div>
                 </Card>
               ) : (!atsAnalysis || atsAnalysis.status === 'analysis_unavailable' || atsAnalysis.overall_ats_score === null) ? (
                 <Card className="p-8 text-center flex flex-col items-center justify-center border-brand-primary/20 bg-brand-light/5 min-h-[300px]">

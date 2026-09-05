@@ -39,13 +39,21 @@ async def create_application(
                 "required_keyphrases": [kp["keyphrase"] for kp in keyphrases]
             }
 
+    st_val = payload.status.value if payload.status else ApplicationStatus.TRACKED.value
+    import datetime
+    applied_time = datetime.datetime.utcnow() if st_val == ApplicationStatus.APPLIED.value else None
+
     app_record = Application(
         user_id=current_user.id,
         company_name=payload.company_name,
         role_title=payload.role_title,
-        status=payload.status.value if payload.status else ApplicationStatus.APPLIED.value,
+        status=st_val,
         jd_text=payload.jd_text,
-        analysis=analysis_data
+        analysis=analysis_data,
+        external_apply_url=payload.external_apply_url,
+        location=payload.location,
+        applied_at=applied_time,
+        application_source="EXTERNAL_USER_CONFIRMED" if st_val == ApplicationStatus.APPLIED.value else None
     )
     db.add(app_record)
     await db.commit()
@@ -98,18 +106,27 @@ async def update_application(
 
     update_data = payload.model_dump(exclude_unset=True)
     
-    if "status" in update_data:
-        app_record.status = update_data["status"].value if update_data["status"] else None
-    if "company_name" in update_data:
+    if "status" in update_data and update_data["status"]:
+        new_st = update_data["status"].value
+        app_record.status = new_st
+        if new_st == ApplicationStatus.APPLIED.value and not app_record.applied_at:
+            import datetime
+            app_record.applied_at = datetime.datetime.utcnow()
+            app_record.application_source = "EXTERNAL_USER_CONFIRMED"
+
+    if "company_name" in update_data and update_data["company_name"]:
         app_record.company_name = update_data["company_name"]
-    if "role_title" in update_data:
+    if "role_title" in update_data and update_data["role_title"]:
         app_record.role_title = update_data["role_title"]
+    if "external_apply_url" in update_data and update_data["external_apply_url"] is not None:
+        app_record.external_apply_url = update_data["external_apply_url"]
+    if "location" in update_data and update_data["location"] is not None:
+        app_record.location = update_data["location"]
         
     if "jd_text" in update_data:
         new_jd = update_data["jd_text"]
         app_record.jd_text = new_jd
         
-        # Recompute analysis if new JD text is provided and user has a resume
         if new_jd and len(new_jd.strip()) > 0:
             res_result = await db.execute(
                 select(Resume)

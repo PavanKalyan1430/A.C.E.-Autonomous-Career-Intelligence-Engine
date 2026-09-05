@@ -29,20 +29,6 @@ async def lifespan(app: FastAPI):
         logger.critical(f"Database connection failed on startup: {e}")
         raise RuntimeError(f"Database connection failed: {e}")
 
-    # Initialize database tables on startup only for SQLite (development/tests)
-    if settings.DATABASE_URL.startswith("sqlite"):
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-            for col, col_type in [("full_name", "VARCHAR"), ("preferences", "JSON")]:
-                try:
-                    await conn.execute(text(f"ALTER TABLE profiles ADD COLUMN {col} {col_type}"))
-                except Exception:
-                    pass
-            for col, col_type in [("location", "VARCHAR"), ("experience", "VARCHAR"), ("job_type", "VARCHAR"), ("remote_onsite", "VARCHAR")]:
-                try:
-                    await conn.execute(text(f"ALTER TABLE jobs ADD COLUMN {col} {col_type}"))
-                except Exception:
-                    pass
     yield
 
 app = FastAPI(

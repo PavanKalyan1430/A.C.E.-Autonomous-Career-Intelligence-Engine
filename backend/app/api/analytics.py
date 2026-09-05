@@ -77,7 +77,9 @@ async def get_dashboard_metrics(
         .order_by(Application.created_at.desc())
     )
     user_applications = list(res_apps.scalars().all())
-    active_applications_count = len(user_applications)
+    # Count only applications explicitly marked APPLIED (or further in pipeline)
+    applied_count = status_counts.get(ApplicationStatus.APPLIED.value, 0)
+    active_applications_count = applied_count
 
     # 3. Interview Sessions & Feedbacks Aggregation
     res_interviews = await db.execute(
@@ -150,7 +152,7 @@ async def get_dashboard_metrics(
                         if "filler_word_ratio" in comm:
                             total_filler_ratio += float(comm["filler_word_ratio"])
 
-    avg_score = round(sum(scores_list) / len(scores_list), 1) if scores_list else 0.0
+    avg_score = round(sum(scores_list) / len(scores_list), 1) if scores_list else None
     latest_score = round(scores_list[-1], 1) if scores_list else None
     highest_score = round(max(scores_list), 1) if scores_list else None
 
@@ -181,7 +183,6 @@ async def get_dashboard_metrics(
     target_role = profile.target_role if profile else None
 
     if target_role or verified_skills:
-        from app.services.career_intelligence import career_intelligence_service
         try:
             candidate_profile = await career_intelligence_service.get_canonical_candidate_profile(
                 current_user.id, db
@@ -247,7 +248,7 @@ async def get_dashboard_metrics(
             priority="high",
             source_metric="completed_interviews"
         ))
-    elif avg_score < 70:
+    elif avg_score is not None and avg_score < 70:
         recommendations.append(RecommendationItem(
             title="Practice System Design & Coding Responses",
             reason=f"Your average mock interview score is {avg_score}/100. Practice response structure using the STAR method.",
@@ -281,7 +282,7 @@ async def get_dashboard_metrics(
 
     # 8. Evidence-Grounded AI Insights
     insights: List[AIInsightItem] = []
-    if completed_sessions_count > 0:
+    if completed_sessions_count > 0 and avg_score is not None:
         insights.append(AIInsightItem(
             text=f"Your mock interview response score averages {avg_score}/100 across {completed_sessions_count} completed sessions.",
             category="strength" if avg_score >= 75 else "improvement"
@@ -343,7 +344,7 @@ async def get_dashboard_metrics(
     ]
 
     # Calculate overall Career Score from actual persisted ATS analysis or interview history
-    career_score_calc = 0
+    career_score_calc = None
     if latest_resume and latest_resume.ats_analysis:
         target_role = profile.target_role if profile else None
         role_key = target_role.strip().lower() if target_role else None
@@ -354,13 +355,13 @@ async def get_dashboard_metrics(
             analyses = list(latest_resume.ats_analysis.values())
             if analyses:
                 analysis = analyses[0]
-        if analysis and isinstance(analysis, dict):
-            career_score_calc = analysis.get("overall_ats_score") or 0
+        if analysis and isinstance(analysis, dict) and analysis.get("overall_ats_score") is not None:
+            career_score_calc = analysis.get("overall_ats_score")
     elif scores_list:
-        career_score_calc = int(avg_score)
+        career_score_calc = int(sum(scores_list) / len(scores_list))
 
     analyzed_apps = [app for app in user_applications if app.analysis and isinstance(app.analysis, dict) and "match_percentage" in app.analysis]
-    real_match_avg = int(sum(app.analysis["match_percentage"] for app in analyzed_apps) / len(analyzed_apps)) if analyzed_apps else 0
+    real_match_avg = int(sum(app.analysis["match_percentage"] for app in analyzed_apps) / len(analyzed_apps)) if analyzed_apps else None
 
     overview_kpi = KPIOverview(
         career_score=career_score_calc,
@@ -432,7 +433,7 @@ async def generate_ai_insights_endpoint(
     db: AsyncSession = Depends(get_db)
 ):
     # Fetch real user analytics metrics
-    dashboard_data = await get_dashboard_metrics(current_user, db)
+    dashboard_data = await get_dashboard_metrics(force_refresh=False, current_user=current_user, db=db)
 
     compact_analytics_context = {
         "user_email": current_user.email,

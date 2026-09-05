@@ -17,7 +17,7 @@ router = APIRouter(prefix="/career", tags=["career"])
 
 import json
 from sqlalchemy.future import select
-from app.models.user import Job
+from app.models.user import Job, Profile, LearningCompletion
 
 @router.get("/profile", response_model=CanonicalCandidateProfile)
 async def get_candidate_profile(
@@ -88,42 +88,90 @@ async def get_career_intelligence(
     intel_data = await career_intelligence_service.generate_career_intelligence(current_user.id, db)
     return CareerIntelligenceResponse(**intel_data)
 
-@router.post("/skills/complete")
+from sqlalchemy.exc import IntegrityError
+from app.models.user import Job, Profile, LearningCompletion, Roadmap, RoadmapNode
+
+@router.put("/skills/complete")
+@router.put("/skills/{node_id}/completion")
 async def toggle_skill_completion(
-    payload: dict,
+    payload: Optional[dict] = None,
+    node_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    payload = payload or {}
+    raw_node_id = payload.get("roadmap_node_id") or payload.get("node_id") or node_id
+    completed = payload.get("completed", True)
     skill_name = payload.get("skill_name")
-    if not skill_name or not isinstance(skill_name, str):
-        raise HTTPException(status_code=400, detail="skill_name is required")
-        
-    res_prof = await db.execute(select(Profile).filter(Profile.user_id == current_user.id))
-    profile = res_prof.scalars().first()
-    if not profile:
-        profile = Profile(user_id=current_user.id)
-        db.add(profile)
-        
-    current_skills_json = profile.skills_json or {"skills": []}
-    skills_list = list(current_skills_json.get("skills", []))
-    
-    # Toggle skill in verified list (case-insensitive check)
-    existing_match = next((s for s in skills_list if s.lower() == skill_name.strip().lower()), None)
-    if existing_match:
-        skills_list.remove(existing_match)
-        is_completed = False
+
+    if raw_node_id is None:
+        raise HTTPException(status_code=400, detail="roadmap_node_id is required")
+
+    if not isinstance(completed, bool):
+        raise HTTPException(status_code=400, detail="completed boolean is required")
+
+    roadmap_node = None
+    if raw_node_id is not None:
+        try:
+            node_pk = int(raw_node_id)
+            res_node = await db.execute(
+                select(RoadmapNode)
+                .join(Roadmap)
+                .filter(RoadmapNode.id == node_pk)
+                .filter(Roadmap.user_id == current_user.id)
+            )
+            roadmap_node = res_node.scalars().first()
+        except ValueError:
+            res_node = await db.execute(
+                select(RoadmapNode)
+                .join(Roadmap)
+                .filter(RoadmapNode.skill_id == str(raw_node_id))
+                .filter(Roadmap.user_id == current_user.id)
+            )
+            roadmap_node = res_node.scalars().first()
+
+    if not roadmap_node:
+        raise HTTPException(status_code=404, detail="Roadmap node not found or unauthorized")
+
+    # Authoritative Ownership Verification
+    res_rm = await db.execute(select(Roadmap).filter(Roadmap.id == roadmap_node.roadmap_id))
+    roadmap = res_rm.scalars().first()
+    if not roadmap or roadmap.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden: You do not own this roadmap node")
+
+    # Idempotent DB state mutation
+    res_comp = await db.execute(
+        select(LearningCompletion)
+        .filter(LearningCompletion.user_id == current_user.id)
+        .filter(LearningCompletion.roadmap_node_id == roadmap_node.id)
+    )
+    existing_completion = res_comp.scalars().first()
+
+    if completed:
+        if not existing_completion:
+            new_comp = LearningCompletion(
+                user_id=current_user.id,
+                roadmap_node_id=roadmap_node.id,
+                skill_name=roadmap_node.skill_name
+            )
+            db.add(new_comp)
     else:
-        skills_list.append(skill_name.strip())
-        is_completed = True
-        
-    profile.skills_json = {"skills": skills_list}
-    db.add(profile)
-    await db.commit()
-    await db.refresh(profile)
-    
-    # Generate updated intelligence with force_refresh
-    intel_data = await career_intelligence_service.generate_career_intelligence(current_user.id, db, force_refresh=True)
-    return {"status": "success", "is_completed": is_completed, "intelligence": intel_data}
+        if existing_completion:
+            await db.delete(existing_completion)
+
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+
+    # Recompute intelligence dynamically with NetworkX graph engine
+    intel_data = await career_intelligence_service.generate_career_intelligence(current_user.id, db, force_refresh=False)
+    return {
+        "status": "success",
+        "is_completed": completed,
+        "roadmap_node_id": roadmap_node.id,
+        "intelligence": intel_data
+    }
 
 @router.post("/refresh", response_model=CareerIntelligenceResponse)
 async def refresh_career_intelligence(

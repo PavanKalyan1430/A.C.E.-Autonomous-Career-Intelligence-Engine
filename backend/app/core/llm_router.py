@@ -28,14 +28,14 @@ def set_active_provider(provider: str):
     global _active_provider
     _active_provider = provider
 
-async def _execute_with_retry(func, retries=1, initial_delay=1.0, backoff_factor=2.0):
+async def _execute_with_retry(func, retries=0, initial_delay=0.5, backoff_factor=1.5):
     delay = initial_delay
     for attempt in range(retries + 1):
         try:
             return await func()
         except (asyncio.TimeoutError, Exception) as e:
             err_str = str(e).lower()
-            if any(term in err_str for term in ["invalid api key", "invalid_api_key", "unauthorized", "401"]):
+            if any(term in err_str for term in ["invalid api key", "invalid_api_key", "unauthorized", "401", "429", "rate limit", "rate_limit", "quota"]):
                 raise e
             if attempt == retries:
                 raise e
@@ -51,17 +51,21 @@ async def generate_content_with_routing(
 ) -> str:
     """
     Centralized router for text LLM generation.
-    Primary: Groq (openai/gpt-oss-120b)
-    Fallback: Gemini Flash (gemini-3.6-flash)
+    Primary: Groq (qwen/qwen3.8-27b)
+    Fallback 1: Groq (qwen/qwen3.6-27b)
+    Fallback 2: Gemini Flash (gemini-2.5-flash)
     """
-    if timeout is None:
-        timeout = settings.LLM_EVALUATION_TIMEOUT
+    if timeout is None or timeout > 20.0:
+        timeout = 20.0
 
-    # 1. Try Groq Primary (key rotated across all configured keys)
-    groq_api_key = await groq_key_rotator.async_next_key()
-    if groq_api_key:
+    # 1. Try Groq Primary (rotate across available keys)
+    max_groq_attempts = max(1, groq_key_rotator.key_count() or 1)
+    for groq_attempt in range(max_groq_attempts):
+        groq_api_key = await groq_key_rotator.async_next_key()
+        if not groq_api_key:
+            break
         try:
-            logger.info("Attempting primary LLM generation via Groq (openai/gpt-oss-120b)")
+            logger.info(f"Attempting primary LLM generation via Groq (key attempt {groq_attempt+1})")
             async with AsyncGroq(api_key=groq_api_key) as groq_client:
                 messages = []
                 if system_instruction:
@@ -72,88 +76,74 @@ async def generate_content_with_routing(
                 if response_mime_type == "application/json":
                     extra_args["response_format"] = {"type": "json_object"}
 
-                # Call Groq with timeout and retry
-                async def _call_groq(model_name="openai/gpt-oss-120b"):
-                    return await asyncio.wait_for(
-                        groq_client.chat.completions.create(
-                            model=model_name,
-                            messages=messages,
-                            temperature=0.2,
-                            **extra_args
-                        ),
-                        timeout=timeout
-                    )
-                
-                try:
-                    response = await _execute_with_retry(lambda: _call_groq("openai/gpt-oss-120b"))
-                    model_used = "openai/gpt-oss-120b"
-                except Exception as ex1:
-                    logger.warning(f"Groq 120b model failed: {ex1}. Trying Groq 20b fallback...")
-                    try:
-                        response = await _execute_with_retry(lambda: _call_groq("openai/gpt-oss-20b"))
-                        model_used = "openai/gpt-oss-20b"
-                    except Exception as ex2:
-                        logger.warning(f"Groq 20b model failed: {ex2}. Trying Groq compound-mini fallback...")
-                        response = await _execute_with_retry(lambda: _call_groq("groq/compound-mini"))
-                        model_used = "groq/compound-mini"
-
-                set_active_provider("Groq")
-                logger.info(f"Successfully generated content via Groq ({model_used}).")
-                return response.choices[0].message.content
+                res = await asyncio.wait_for(
+                    groq_client.chat.completions.create(
+                        model="qwen/qwen3.8-27b",
+                        messages=messages,
+                        temperature=0.2,
+                        **extra_args
+                    ),
+                    timeout=timeout
+                )
+                content = res.choices[0].message.content
+                if content and content.strip():
+                    set_active_provider("Groq")
+                    logger.info("Successfully generated content via Groq.")
+                    return content
         except Exception as e:
-            logger.warning(f"Groq primary generation failed: {e}. Falling back to Gemini.")
+            err_msg = str(e).lower()
+            logger.warning(f"Groq attempt {groq_attempt+1} failed: {e}. Trying next key/provider...")
+            if "rate_limit" in err_msg or "429" in err_msg:
+                continue
 
-    # 2. Try Gemini Fallback
+    # 2. Try Gemini Models Fallback
     gemini_client = get_genai_client()
     if gemini_client:
-        try:
-            logger.info("Attempting fallback LLM generation via Gemini (gemini-3.6-flash)")
-            full_prompt = prompt
-            if system_instruction:
-                full_prompt = f"{system_instruction}\n\n{prompt}"
+        full_prompt = prompt
+        if system_instruction:
+            full_prompt = f"{system_instruction}\n\n{prompt}"
 
-            if hasattr(gemini_client, "models"):
-                # modern google-genai Client
-                config = {}
-                if response_mime_type == "application/json":
-                    config["response_mime_type"] = "application/json"
-                
-                async def _call_gemini_modern():
-                    return await asyncio.wait_for(
-                        gemini_client.aio.models.generate_content(
-                            model="gemini-3.6-flash",
-                            contents=full_prompt,
-                            config=config
-                        ),
-                        timeout=timeout
-                    )
-                response = await _execute_with_retry(_call_gemini_modern)
-                set_active_provider("Gemini")
-                logger.info("Successfully generated content via Gemini.")
-                return response.text
-            else:
-                # legacy google-generativeai client
-                generation_config = {}
-                if response_mime_type == "application/json":
-                    generation_config["response_mime_type"] = "application/json"
-                
-                async def _call_gemini_legacy():
-                    return await asyncio.wait_for(
-                        asyncio.to_thread(
-                            gemini_client.generate_content,
-                            full_prompt,
-                            generation_config=generation_config
-                        ),
-                        timeout=timeout
-                    )
-                response = await _execute_with_retry(_call_gemini_legacy)
-                set_active_provider("Gemini")
-                logger.info("Successfully generated content via Gemini (legacy).")
-                return response.text
-        except Exception as e:
-            logger.exception("Gemini fallback generation failed:")
-            set_active_provider("None")
-            raise e
+        config = {"temperature": 0.0}
+        if response_mime_type == "application/json":
+            config["response_mime_type"] = "application/json"
+
+        gemini_models = ["gemini-2.5-flash", "gemini-1.5-flash"]
+        for g_model in gemini_models:
+            try:
+                logger.info(f"Attempting fallback LLM generation via Gemini ({g_model})")
+                if hasattr(gemini_client, "models"):
+                    async def _call_gemini_modern():
+                        return await asyncio.wait_for(
+                            gemini_client.aio.models.generate_content(
+                                model=g_model,
+                                contents=full_prompt,
+                                config=config
+                            ),
+                            timeout=timeout
+                        )
+                    response = await _execute_with_retry(_call_gemini_modern)
+                    set_active_provider("Gemini")
+                    logger.info(f"Successfully generated content via Gemini ({g_model}).")
+                    return response.text
+                else:
+                    generation_config = {}
+                    if response_mime_type == "application/json":
+                        generation_config["response_mime_type"] = "application/json"
+                    async def _call_gemini_legacy():
+                        return await asyncio.wait_for(
+                            asyncio.to_thread(
+                                gemini_client.generate_content,
+                                full_prompt,
+                                generation_config=generation_config
+                            ),
+                            timeout=timeout
+                        )
+                    response = await _execute_with_retry(_call_gemini_legacy)
+                    set_active_provider("Gemini")
+                    logger.info(f"Successfully generated content via Gemini ({g_model} legacy).")
+                    return response.text
+            except Exception as e:
+                logger.warning(f"Gemini {g_model} failed: {e}. Trying next model...")
 
     set_active_provider("None")
     raise ValueError("No LLM providers available and configured.")
@@ -272,63 +262,7 @@ class RoutedChatModel(BaseChatModel):
         if tool_messages_count >= settings.AGENT_MAX_TOOL_CALLS:
             raise ValueError("Agent tool call limit exceeded")
 
-        # 1. Try Groq Primary (key rotated across all configured keys)
-        groq_api_key = await groq_key_rotator.async_next_key()
-        if groq_api_key:
-            try:
-                async with AsyncGroq(api_key=groq_api_key) as groq_client:
-                    groq_msgs = self._convert_messages_to_groq(messages)
-                    groq_tools = self._get_groq_tools()
-
-                    extra_args = {}
-                    if groq_tools:
-                        extra_args["tools"] = groq_tools
-
-                    async def _call_groq(model_name="openai/gpt-oss-120b"):
-                        return await asyncio.wait_for(
-                            groq_client.chat.completions.create(
-                                model=model_name,
-                                messages=groq_msgs,
-                                temperature=self.temperature,
-                                **extra_args
-                            ),
-                            timeout=settings.LLM_QUESTION_TIMEOUT
-                        )
-                    try:
-                        response = await _execute_with_retry(lambda: _call_groq("openai/gpt-oss-120b"))
-                        model_used = "openai/gpt-oss-120b"
-                    except Exception as ex1:
-                        logger.warning(f"Groq 120b model failed: {ex1}. Trying Groq 20b fallback...")
-                        try:
-                            response = await _execute_with_retry(lambda: _call_groq("openai/gpt-oss-20b"))
-                            model_used = "openai/gpt-oss-20b"
-                        except Exception as ex2:
-                            logger.warning(f"Groq 20b model failed: {ex2}. Trying Groq compound-mini fallback...")
-                            response = await _execute_with_retry(lambda: _call_groq("groq/compound-mini"))
-                            model_used = "groq/compound-mini"
-
-                    set_active_provider("Groq")
-                    
-                    # Parse tool calls if returned by Groq
-                    tool_calls = []
-                    res_msg = response.choices[0].message
-                    if hasattr(res_msg, "tool_calls") and res_msg.tool_calls:
-                        for tc in res_msg.tool_calls:
-                            tool_calls.append({
-                                "name": tc.function.name,
-                                "args": json.loads(tc.function.arguments),
-                                "id": tc.id
-                            })
-                    
-                    ai_msg = AIMessage(
-                        content=res_msg.content or "",
-                        tool_calls=tool_calls
-                    )
-                    return ChatResult(generations=[ChatGeneration(message=ai_msg)])
-            except Exception as e:
-                logger.warning(f"Groq agent generation failed: {e}. Falling back to Gemini.")
-
-        # 2. Try Gemini Fallback
+        # 1. Try Gemini 3.6 Flash Primary
         gemini_client = get_genai_client()
         if gemini_client:
             try:
@@ -369,9 +303,51 @@ class RoutedChatModel(BaseChatModel):
                 return ChatResult(generations=[ChatGeneration(message=ai_msg)])
 
             except Exception as e:
-                logger.exception("Gemini agent fallback failed:")
-                set_active_provider("None")
-                raise e
+                logger.warning(f"Gemini agent generation failed: {e}. Falling back to Groq...")
+
+        # 2. Try Groq Secondary
+        max_groq_attempts = min(3, groq_key_rotator.key_count() or 1)
+        for groq_attempt in range(max_groq_attempts):
+            groq_api_key = await groq_key_rotator.async_next_key()
+            if not groq_api_key:
+                break
+            try:
+                async with AsyncGroq(api_key=groq_api_key) as groq_client:
+                    groq_msgs = self._convert_messages_to_groq(messages)
+                    groq_tools = self._get_groq_tools()
+
+                    extra_args = {}
+                    if groq_tools:
+                        extra_args["tools"] = groq_tools
+
+                    res = await asyncio.wait_for(
+                        groq_client.chat.completions.create(
+                            model="qwen/qwen3.8-27b",
+                            messages=groq_msgs,
+                            temperature=self.temperature,
+                            **extra_args
+                        ),
+                        timeout=settings.LLM_QUESTION_TIMEOUT
+                    )
+                    content = res.choices[0].message.content
+                    if content or getattr(res.choices[0].message, "tool_calls", None):
+                        set_active_provider("Groq")
+                        tool_calls = []
+                        res_msg = res.choices[0].message
+                        if hasattr(res_msg, "tool_calls") and res_msg.tool_calls:
+                            for tc in res_msg.tool_calls:
+                                tool_calls.append({
+                                    "name": tc.function.name,
+                                    "args": json.loads(tc.function.arguments),
+                                    "id": tc.id
+                                })
+                        ai_msg = AIMessage(content=res_msg.content or "", tool_calls=tool_calls)
+                        return ChatResult(generations=[ChatGeneration(message=ai_msg)])
+            except Exception as e:
+                logger.warning(f"Groq attempt {groq_attempt+1} failed: {e}")
+                if "rate_limit" in str(e).lower() or "429" in str(e):
+                    break
+                continue
 
         set_active_provider("None")
         raise ValueError("No LLM providers available for agent execution.")

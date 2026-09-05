@@ -4,25 +4,10 @@ import { Bell, Search } from 'lucide-react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 
-const ROUTE_TITLES: Record<string, string> = {
-  '/dashboard': 'Dashboard',
-  '/career': 'AI Career Agent',
-  '/resume': 'Resume Intelligence',
-  '/jobs': 'Job Intelligence',
-  '/skills': 'Skill Roadmap',
-  '/companies': 'Company Intelligence',
-  '/interviews': 'Mock Interview',
-  '/applications': 'Applications Pipeline',
-  '/analytics': 'Career Analytics',
-  '/settings': 'Settings & Memory',
-}
-
 export default function AppLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user } = useAuthStore()
-
-  const currentTitle = ROUTE_TITLES[location.pathname] || 'A.C.E. Career OS'
 
   const displayName = user?.profile?.full_name || (user?.email ? user.email.split('@')[0] : 'User')
   const initials = displayName
@@ -41,8 +26,6 @@ export default function AppLayout() {
         {/* Top Header */}
         <header className="h-16 bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700 flex items-center justify-between px-8 sticky top-0 z-10">
           <div className="flex items-center gap-6">
-            <h2 className="text-base font-semibold text-neutral-800 dark:text-white">{currentTitle}</h2>
-            
             <div className="relative w-80 hidden md:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
               <input 

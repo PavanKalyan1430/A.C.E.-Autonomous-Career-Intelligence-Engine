@@ -5,8 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
+import networkx as nx
+
 from app.models.user import (
-    User, Profile, Resume, Application, InterviewSession, UserMemory, Company
+    User, Profile, Resume, Application, InterviewSession, UserMemory, Company,
+    LearningCompletion, Roadmap, RoadmapNode
 )
 from app.services.nlp_service import production_nlp_service
 from app.services.company_intelligence import CompanyIntelligenceService
@@ -80,12 +83,31 @@ class CareerIntelligenceService:
         apps = list(res_apps.scalars().all())
 
         target_role = ""
-        if profile and profile.target_role:
-            target_role = profile.target_role
-        elif apps:
-            target_role = apps[0].role_title
+        if profile and profile.target_role and profile.target_role.strip():
+            target_role = profile.target_role.strip()
+        elif latest_resume and latest_resume.ats_analysis and isinstance(latest_resume.ats_analysis, dict) and len(latest_resume.ats_analysis) > 0:
+            ats_roles = list(latest_resume.ats_analysis.keys())
+            target_role = ats_roles[-1].title().strip()
+        elif apps and apps[0].role_title and apps[0].role_title.strip():
+            target_role = apps[0].role_title.strip()
+        elif latest_resume and latest_resume.parsed_data and isinstance(latest_resume.parsed_data, dict):
+            p_data = latest_resume.parsed_data
+            target_role = str(
+                p_data.get("target_role") or
+                p_data.get("job_title") or
+                p_data.get("current_role") or
+                p_data.get("role") or
+                ""
+            ).strip()
 
-        target_company = apps[0].company_name if apps else ""
+        # PHASE 2: Target company resolved from candidate profile preferences first
+        target_company = ""
+        if profile and profile.preferences and isinstance(profile.preferences, dict) and profile.preferences.get("target_company"):
+            target_company = str(profile.preferences.get("target_company")).strip()
+        elif profile and hasattr(profile, "target_company") and getattr(profile, "target_company"):
+            target_company = str(getattr(profile, "target_company")).strip()
+        elif apps and apps[0].company_name and apps[0].company_name.strip():
+            target_company = apps[0].company_name.strip()
 
         # 4. Fetch User Memories (Weak Areas)
         res_mems = await db.execute(select(UserMemory).filter(UserMemory.user_id == user_id))
@@ -119,7 +141,8 @@ class CareerIntelligenceService:
                             if eval_data.get("score", 100) < 70:
                                 weak_areas_set.add(eval_data.get("category", "General"))
 
-        avg_score = round(sum(scores) / len(scores), 1) if scores else 0.0
+        # PHASE 13: Missing score is None, not 0.0
+        avg_score = round(sum(scores) / len(scores), 1) if scores else None
 
         return {
             "user_id": user.id,
@@ -137,23 +160,8 @@ class CareerIntelligenceService:
         self, user_id: int, db: AsyncSession, force_refresh: bool = False
     ) -> Dict[str, Any]:
         import hashlib
+        import datetime
         profile_data = await self.get_canonical_candidate_profile(user_id, db)
-
-        # Check backend persistent cache unless force_refresh is requested
-        res_prof = await db.execute(select(Profile).filter(Profile.user_id == user_id))
-        profile_obj = res_prof.scalars().first()
-
-        verified_str = ",".join(sorted(profile_data.get("verified_skills", [])))
-        state_str = f"{profile_data.get('target_role', '')}:{verified_str}:{profile_data.get('target_company', '')}"
-        state_hash = hashlib.md5(state_str.encode("utf-8")).hexdigest()
-
-        if profile_obj and profile_obj.preferences and not force_refresh:
-            cached = profile_obj.preferences.get("career_intelligence_cache")
-            if isinstance(cached, dict) and cached.get("state_hash") == state_hash:
-                intel_res = cached.get("intelligence")
-                if intel_res and isinstance(intel_res, dict) and "learning_roadmap" in intel_res:
-                    logger.info("Serving career intelligence instantly from backend cache.")
-                    return intel_res
 
         # Retrieve the latest resume to run ATS analysis
         res_resumes = await db.execute(
@@ -169,19 +177,19 @@ class CareerIntelligenceService:
         if profile_data["target_company"]:
             try:
                 c_insights = await self.company_intel_service.get_company_insights(profile_data["target_company"])
-                if c_insights and c_insights.get("tech_stack"):
+                if c_insights and isinstance(c_insights, dict) and c_insights.get("tech_stack"):
                     company_tech_stack = normalize_skill_list(c_insights.get("tech_stack", []))
             except Exception as e:
                 logger.warning(f"Could not fetch company insights for {profile_data['target_company']}: {e}")
 
-        # If company stack is empty or missing, generate expected tech stack dynamically for the specific target role using LLM
+        # PHASE 4: Requirement generation isolated strictly from candidate evidence (no resume text passed into role prompt)
         if not company_tech_stack and profile_data["target_role"]:
             try:
                 role_prompt = f"""
 Identify the standard, high-demand technical skills and tool stack genuinely required for the target role: "{profile_data['target_role']}".
 Strict Rules:
 - Return ONLY technical skills, frameworks, and tools that are directly relevant and standard for "{profile_data['target_role']}".
-- Do NOT include generic or unrelated software stacks that do not belong to this target role.
+- Do NOT reference any candidate skills, experience, or resume text.
 - Return ONLY a JSON list of strings (e.g. ["Skill1", "Skill2", "Skill3"]). Do not include conversational text or markdown code fences.
 """
                 res = await generate_content_with_routing(prompt=role_prompt, response_mime_type="application/json", timeout=10.0)
@@ -191,47 +199,74 @@ Strict Rules:
             except Exception as e:
                 logger.warning(f"Failed to generate dynamic tech stack for target role: {e}")
 
-        # Run ATS analysis to fetch validated evidence & gaps
+        # PHASE 3: Deterministic SHA-256 state fingerprint covering ALL meaningful inputs
+        resume_raw = (latest_resume.raw_text or "") if latest_resume else ""
+        resume_hash = hashlib.sha256(resume_raw.encode("utf-8")).hexdigest()
+        verified_hash = hashlib.sha256(",".join(sorted(profile_data.get("verified_skills", []))).encode("utf-8")).hexdigest()
+        weak_hash = hashlib.sha256(",".join(sorted(profile_data.get("weak_areas", []))).encode("utf-8")).hexdigest()
+        company_stack_hash = hashlib.sha256(",".join(sorted(company_tech_stack)).encode("utf-8")).hexdigest()
+
+        # Query user applications for JD text matching target role
+        app_res = await db.execute(
+            select(Application)
+            .filter(Application.user_id == user_id)
+            .order_by(Application.created_at.desc())
+        )
+        apps_list = list(app_res.scalars().all())
+        target_role_str = (profile_data.get("target_role") or "").strip().lower()
+        matching_app_obj = next((a for a in apps_list if (a.role_title or "").strip().lower() == target_role_str and a.jd_text), None)
+        jd_text_val = matching_app_obj.jd_text if matching_app_obj else ""
+        jd_hash = hashlib.sha256((jd_text_val or "").encode("utf-8")).hexdigest()
+
+        state_components = (
+            f"{profile_data.get('target_role', '').strip()}|"
+            f"{profile_data.get('target_company', '').strip()}|"
+            f"{resume_hash}|{verified_hash}|{weak_hash}|{jd_hash}|{company_stack_hash}"
+        )
+        content_fingerprint = hashlib.sha256(state_components.encode("utf-8")).hexdigest()
+
+        # PHASE 11: Version hash differentiates force refresh while maintaining content fingerprint semantics
+        state_hash = content_fingerprint
+
+        # Check DB for existing roadmap for this user matching target_role
+        res_roadmap = await db.execute(
+            select(Roadmap)
+            .filter(Roadmap.user_id == user_id)
+            .order_by(Roadmap.created_at.desc())
+            .options(selectinload(Roadmap.nodes))
+        )
+        user_roadmaps = list(res_roadmap.scalars().all())
+        existing_roadmap = None
+        if user_roadmaps:
+            for r in user_roadmaps:
+                if (r.target_role or "").strip().lower() == target_role_str:
+                    existing_roadmap = r
+                    break
+
+        # Fetch cached ATS analysis strictly from database
         ats_analysis = None
         if latest_resume and profile_data["target_role"]:
-            # Query user applications to see if there is an application for this role with a JD
-            app_result = await db.execute(
-                select(Application)
-                .filter(Application.user_id == user_id)
-                .order_by(Application.created_at.desc())
-            )
-            apps = list(app_result.scalars().all())
-            jd_text = None
-            matching_app = next((a for a in apps if a.role_title.lower() == profile_data["target_role"].lower() and a.jd_text), None)
-            if matching_app:
-                jd_text = matching_app.jd_text
-
-            try:
+            t_role_str = profile_data["target_role"].strip()
+            role_key = t_role_str.lower()
+            if latest_resume.ats_analysis and isinstance(latest_resume.ats_analysis, dict) and role_key in latest_resume.ats_analysis:
+                ats_analysis = latest_resume.ats_analysis[role_key]
+            else:
                 from app.services.ats_analyzer import ats_analyzer_service
-                ats_analysis = await ats_analyzer_service.analyze_resume_ats(
-                    raw_text=latest_resume.raw_text,
-                    parsed_data=latest_resume.parsed_data or {},
-                    target_role=profile_data["target_role"],
-                    jd_text=jd_text
-                )
-            except Exception as e:
-                logger.error(f"Failed to compute ATS analysis for career intelligence: {e}")
+                ats_analysis = ats_analyzer_service._build_unavailable_response(t_role_str)
 
-        # 2. Dynamic Skill Alignment using validated evidence and gaps from ATS analysis if available
+        # 2. Dynamic Skill Alignment using validated evidence and gaps
         candidate_skills_set = set(profile_data["verified_skills"])
         target_skills_set = set(normalize_skill_list(company_tech_stack))
 
         if ats_analysis and ats_analysis.get("status") == "success":
             matched_skills = normalize_skill_list(ats_analysis.get("matched_keywords", []))
-            missing_skills = normalize_skill_list([m.get("keyword", "") for m in ats_analysis.get("missing_keywords", [])])
+            missing_skills = normalize_skill_list([m.get("keyword", "") for m in ats_analysis.get("missing_keywords", []) if isinstance(m, dict) and m.get("keyword")])
             weak_skills = normalize_skill_list(ats_analysis.get("weak_keywords", []))
             
-            # Merge weak skills into missing/gap skills if they aren't already matched
             for ws in weak_skills:
                 if ws not in matched_skills and ws not in missing_skills:
                     missing_skills.append(ws)
                     
-            # 🚨 OVERRIDE: Manually verified skills MUST be considered matched!
             matched_lower = {s.lower().strip() for s in matched_skills}
             for vs in profile_data["verified_skills"]:
                 vs_norm = vs.strip()
@@ -239,7 +274,6 @@ Strict Rules:
                     matched_skills.append(vs_norm)
                     matched_lower.add(vs_norm.lower())
             
-            # Remove any verified skills from the missing gaps
             missing_skills = [m for m in missing_skills if m.lower().strip() not in matched_lower]
             
             total_reqs = len(matched_skills) + len(missing_skills)
@@ -251,7 +285,7 @@ Strict Rules:
             missing_skills = list(target_skills_set - candidate_skills_set)
             coverage_pct = round((len(matched_skills) / max(len(target_skills_set), 1)) * 100, 1) if target_skills_set else 100.0
 
-        # Enforce that if no target_role exists, we notify user rather than fabricating data.
+        # Enforce no target_role response
         if not profile_data["target_role"]:
             return {
                 "profile": profile_data,
@@ -265,11 +299,20 @@ Strict Rules:
                 "prioritized_gaps": [],
                 "learning_roadmap": [],
                 "recommendations": [],
-                "ai_synthesis": "Please configure your target role in your profile to generate career intelligence."
+                "ai_synthesis": "Please configure your target role in your profile to generate career intelligence.",
+                "readiness_score": None,
+                "learning_completion_pct": None,
+                "next_best_action": None
             }
 
-        # 3. Dynamic Synthesis of roadmaps, prioritized gaps, and recommendations via LLM
-        prompt = f"""
+        # 3. Roadmap Generation (if no cached roadmap exists or force_refresh is requested)
+        if not existing_roadmap or force_refresh:
+            # PHASE 11: Preserve active LearningCompletions before regenerating roadmap
+            res_old_comps = await db.execute(select(LearningCompletion).filter(LearningCompletion.user_id == user_id))
+            old_completions = list(res_old_comps.scalars().all())
+            completed_skills_history = {c.skill_name.lower().strip() for c in old_completions if c.skill_name}
+
+            prompt = f"""
 You are an expert career advisor. Evaluate this candidate's profile against the target role: "{profile_data['target_role']}".
 
 Candidate Profile:
@@ -286,20 +329,21 @@ Analysis Gaps:
 - Coverage Percentage: {coverage_pct}%
 """
 
-        if ats_analysis and ats_analysis.get("status") == "success":
-            prompt += f"""
+            if ats_analysis and ats_analysis.get("status") == "success":
+                prompt += f"""
 Validated Resume Evidence & Gaps (ATS Analysis):
 - Key Strengths: {json.dumps(ats_analysis.get("key_strengths", []))}
 - Evidence Matrix: {json.dumps(ats_analysis.get("evidence_matrix", []), indent=2)}
 - Actionable Improvements: {json.dumps(ats_analysis.get("actionable_improvements", []), indent=2)}
 """
 
-        prompt += """
+            prompt += """
 Rules:
-1. Do not invent details. Base recommendations and gaps strictly on the comparison of verified skills versus target requirements, leveraging the validated evidence and gaps from the resume ATS analysis.
-2. Recommendations must arise only from detected gaps. If there are no missing skills, weak areas, or deficiencies, do not recommend random learning resources or paths.
+1. Do not invent details. Base recommendations and gaps strictly on the comparison of verified skills versus target requirements.
+2. Recommendations must arise only from detected gaps.
 3. Roadmap must be dynamically generated. Do not use generic templates.
-4. Output must be a valid JSON matching the schema below.
+4. Output must be valid JSON matching the schema below.
+5. Do NOT provide fake effort numbers if effort cannot be estimated; return null or realistic hours.
 
 JSON Schema:
 {
@@ -315,11 +359,11 @@ JSON Schema:
     {
       "id": "<string: lowercase unique ID e.g. fastapi>",
       "name": "<string: skill name>",
-      "status": "<string: completed, focus, recommended, or blocked>",
+      "status": "<string: focus or recommended>",
       "impact": "<string: high, or medium>",
-      "prerequisites": [<list of strings: prerequisite skill IDs or names>],
+      "prerequisites": [<list of strings: prerequisite skill IDs only (must match an 'id' in this list)>],
       "reason": "<string: reason for this placement>",
-      "estimated_effort_hours": <int: estimated hours of effort>
+      "estimated_effort_hours": null
     }
   ],
   "recommendations": [
@@ -327,127 +371,278 @@ JSON Schema:
       "title": "<string: title of recommendation>",
       "priority": "<string: high, medium, or low>",
       "reason": "<string: reason why recommended>",
-      "source_metrics": [<list of strings: e.g. "interview_history_count", "resume_gap", "interview_weakness">],
+      "source_metrics": [<list of strings>],
       "recommended_action": "<string: concrete next action steps>"
     }
   ],
-  "ai_synthesis": "<string: 2-sentence executive career roadmap summary>"
+  "ai_synthesis": "<string: executive career roadmap summary>"
 }
 
-Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes outside the JSON.
+Return ONLY valid JSON matching this schema. Do not add markdown code fences.
 """
 
-        try:
-            res_text = await generate_content_with_routing(prompt=prompt, response_mime_type="application/json", timeout=25.0)
-            cleaned_json = res_text.strip()
-            if cleaned_json.startswith("```"):
-                lines = cleaned_json.splitlines()
-                if lines[0].startswith("```"):
-                    lines = lines[1:]
-                if lines and lines[-1].startswith("```"):
-                    lines = lines[:-1]
-                cleaned_json = "\n".join(lines).strip()
+            is_degraded = False
+            try:
+                res_text = await generate_content_with_routing(prompt=prompt, response_mime_type="application/json", timeout=25.0)
+                cleaned_json = res_text.strip()
+                if cleaned_json.startswith("```"):
+                    lines = cleaned_json.splitlines()
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines and lines[-1].startswith("```"):
+                        lines = lines[:-1]
+                    cleaned_json = "\n".join(lines).strip()
 
-            data = json.loads(cleaned_json)
-        except Exception as e:
-            logger.error(f"Error generating dynamic career intelligence via LLM: {e}. Utilizing local dynamic data-driven fallback.")
-            
-            # Dynamic local fallback based strictly on user data to handle offline/test environments
-            prioritized_gaps = []
-            for ms in missing_skills:
-                evidence = ["resume_gap"]
-                priority = "medium"
-                if ms in profile_data["weak_areas"]:
-                    priority = "high"
-                    evidence.append("interview_weakness")
-                prioritized_gaps.append({
-                    "skill": ms,
-                    "priority": priority,
-                    "reason": f"Skill '{ms}' required for the target role was not found in candidate's verified skills list.",
-                    "evidence_sources": evidence
-                })
-            
-            # Ensure weak areas from mock interviews that might not be in missing_skills are also analyzed
-            for wa in profile_data["weak_areas"]:
-                if wa not in [g["skill"] for g in prioritized_gaps]:
+                data = json.loads(cleaned_json)
+            except Exception as e:
+                # PHASE 14: Controlled LLM failure fallback without fabricated scores, fake effort (no 8/12), or fake achievements
+                logger.error(f"Error generating dynamic career intelligence via LLM: {e}. Utilizing dynamic data-driven degraded fallback.")
+                is_degraded = True
+                
+                prioritized_gaps = []
+                for ms in missing_skills:
+                    evidence = ["resume_gap"]
+                    priority = "medium"
+                    if ms in profile_data["weak_areas"]:
+                        priority = "high"
+                        evidence.append("interview_weakness")
                     prioritized_gaps.append({
-                        "skill": wa,
-                        "priority": "high",
-                        "reason": f"Active weakness in '{wa}' was detected in mock interview history.",
-                        "evidence_sources": ["interview_weakness"]
+                        "skill": ms,
+                        "priority": priority,
+                        "reason": f"Skill '{ms}' required for target role {profile_data['target_role']} was not verified in profile evidence.",
+                        "evidence_sources": evidence
+                    })
+                
+                learning_roadmap = []
+                for gap in prioritized_gaps:
+                    learning_roadmap.append({
+                        "id": gap["skill"].lower().replace(" ", "_"),
+                        "name": gap["skill"],
+                        "status": "focus" if gap["priority"] == "high" else "recommended",
+                        "impact": gap["priority"],
+                        "prerequisites": [],
+                        "reason": gap["reason"],
+                        "estimated_effort_hours": None  # PHASE 5: No hardcoded 8 or 12
                     })
 
-            learning_roadmap = []
-            for gap in prioritized_gaps:
-                learning_roadmap.append({
-                    "id": gap["skill"].lower().replace(" ", "_"),
-                    "name": gap["skill"],
-                    "status": "focus" if gap["priority"] == "high" else "recommended",
-                    "impact": gap["priority"],
-                    "prerequisites": [],
-                    "reason": gap["reason"],
-                    "estimated_effort_hours": 12 if gap["priority"] == "high" else 8
-                })
-
-            recommendations = []
-            if profile_data["interview_history_count"] == 0:
-                recommendations.append({
-                    "title": "Complete Initial Mock Interview",
-                    "priority": "high",
-                    "reason": "Mock interview profile is currently empty.",
-                    "source_metrics": ["interview_history_count"],
-                    "recommended_action": "Launch your first mock interview simulation to assess system design and communication skills."
-                })
-            for gap in prioritized_gaps:
-                recommendations.append({
-                    "title": f"Master {gap['skill']}",
-                    "priority": gap["priority"],
-                    "reason": gap["reason"],
-                    "source_metrics": gap["evidence_sources"],
-                    "recommended_action": f"Review core concepts, architecture guidelines, and typical interview questions for {gap['skill']}."
-                })
-
-            data = {
-                "prioritized_gaps": prioritized_gaps,
-                "learning_roadmap": learning_roadmap,
-                "recommendations": recommendations,
-                "ai_synthesis": f"Target role skill coverage for {profile_data['target_role']} is {coverage_pct}%."
-            }
-
-        # Enrich prerequisites and force verified skills to completed status or blocked if prereqs unmet
-        enriched_roadmap = []
-        verified_skills_lower = {s.lower() for s in profile_data["verified_skills"]}
-        
-        # First pass to compute completed nodes
-        raw_nodes = data.get("learning_roadmap", [])
-        for node in raw_nodes:
-            node_copy = dict(node)
-            raw_prereqs = node_copy.get("prerequisites", [])
-            enriched_prereqs = []
-            has_unmet_prereq = False
-            for p in raw_prereqs:
-                p_name = p.get("name") if isinstance(p, dict) else str(p)
-                met = p_name.lower() in verified_skills_lower
-                if not met:
-                    has_unmet_prereq = True
-                enriched_prereqs.append({
-                    "name": p_name,
-                    "met": met
-                })
-            node_copy["prerequisites"] = enriched_prereqs
-            node_name = node_copy.get("name", "")
-            
-            if node_name.lower() in verified_skills_lower:
-                node_copy["status"] = "completed"
-            elif has_unmet_prereq:
-                node_copy["status"] = "blocked"
-            else:
-                # Keep existing focus or recommended status
-                current_status = str(node_copy.get("status", "recommended")).lower()
-                node_copy["status"] = current_status if current_status in ["focus", "recommended"] else "recommended"
+                recommendations = []
+                data = {
+                    "prioritized_gaps": prioritized_gaps,
+                    "learning_roadmap": learning_roadmap,
+                    "recommendations": recommendations,
+                    "ai_synthesis": f"Skill coverage for target role '{profile_data['target_role']}' is {coverage_pct}% (degraded analysis)."
+                }
                 
-            enriched_roadmap.append(node_copy)
+            # Create new Roadmap DB entity with distinct version_hash if force_refresh
+            version_str = f"{content_fingerprint}_rf_{int(datetime.datetime.now(datetime.timezone.utc).timestamp())}" if force_refresh else content_fingerprint
 
+            # Delete old roadmap if replacing
+            if existing_roadmap:
+                await db.delete(existing_roadmap)
+                await db.flush()
+                
+            roadmap_db = Roadmap(
+                user_id=user_id,
+                target_role=profile_data["target_role"],
+                target_company=profile_data["target_company"],
+                version_hash=version_str
+            )
+            db.add(roadmap_db)
+            await db.flush()
+            
+            # Create new nodes and migrate completions safely
+            for n in data.get("learning_roadmap", []):
+                prereqs = n.get("prerequisites", [])
+                if not isinstance(prereqs, list):
+                    prereqs = []
+                prereqs = [p["name"] if isinstance(p, dict) else str(p) for p in prereqs]
+                
+                effort_val = n.get("estimated_effort_hours")
+                if effort_val in [8, 12] and is_degraded:
+                    effort_val = None  # Enforce no hardcoded 8/12
+
+                node_db = RoadmapNode(
+                    roadmap_id=roadmap_db.id,
+                    skill_name=n["name"],
+                    skill_id=n.get("id", n["name"].lower().replace(" ", "_")),
+                    status=n.get("status", "recommended"),  # Persisted recommendation status
+                    impact=n.get("impact", "medium"),
+                    estimated_effort_hours=effort_val,
+                    reason=n.get("reason", ""),
+                    prerequisites_json=prereqs
+                )
+                db.add(node_db)
+                await db.flush()
+
+                # Re-link existing user completion if user previously completed this skill
+                if n["name"].lower().strip() in completed_skills_history:
+                    new_comp = LearningCompletion(
+                        user_id=user_id,
+                        roadmap_node_id=node_db.id,
+                        skill_name=node_db.skill_name
+                    )
+                    db.add(new_comp)
+
+            await db.commit()
+            await db.refresh(roadmap_db)
+            existing_roadmap = roadmap_db
+            
+            # Cache meta
+            res_prof = await db.execute(select(Profile).filter(Profile.user_id == user_id))
+            profile_obj = res_prof.scalars().first()
+            if profile_obj:
+                profile_obj.preferences = dict(profile_obj.preferences or {})
+                profile_obj.preferences["career_intelligence_meta"] = {
+                    "version_hash": version_str,
+                    "prioritized_gaps": data.get("prioritized_gaps", []),
+                    "recommendations": data.get("recommendations", []),
+                    "ai_synthesis": data.get("ai_synthesis")
+                }
+                db.add(profile_obj)
+                await db.commit()
+                
+        # Retrieve meta from cache
+        res_prof = await db.execute(select(Profile).filter(Profile.user_id == user_id))
+        profile_obj = res_prof.scalars().first()
+        meta = profile_obj.preferences.get("career_intelligence_meta", {}) if profile_obj and profile_obj.preferences else {}
+        
+        # PHASE 6: Fetch explicit LearningCompletions tied strictly to user and roadmap nodes
+        res_comps = await db.execute(select(LearningCompletion).filter(LearningCompletion.user_id == user_id))
+        user_completions = list(res_comps.scalars().all())
+        completed_node_ids = {c.roadmap_node_id for c in user_completions if c.roadmap_node_id}
+        
+        # PHASE 7: Possessing a verified skill is distinct from learning completion
+        verified_skills_lower = {s.lower().strip() for s in profile_data["verified_skills"]}
+
+        res_nodes = await db.execute(select(RoadmapNode).filter(RoadmapNode.roadmap_id == existing_roadmap.id))
+        roadmap_nodes_list = list(res_nodes.scalars().all())
+
+        G = nx.DiGraph()
+        node_lookup = {}
+        for nd in roadmap_nodes_list:
+            n_data = {
+                "id": nd.skill_id,
+                "db_node_id": nd.id,
+                "name": nd.skill_name,
+                "impact": nd.impact,
+                "estimated_effort_hours": nd.estimated_effort_hours,
+                "reason": nd.reason,
+                "prerequisites_json": nd.prerequisites_json,
+                "db_status": nd.status  # Persisted recommendation status
+            }
+            G.add_node(nd.skill_id, **n_data)
+            node_lookup[nd.skill_id] = nd
+
+        # PHASE 9: Deterministic NetworkX DAG construction & cycle handling
+        for node_id in G.nodes():
+            for prereq in G.nodes[node_id]["prerequisites_json"]:
+                if G.has_node(prereq) and prereq != node_id:
+                    # Prevent cycle before adding edge
+                    if not nx.has_path(G, node_id, prereq):
+                        G.add_edge(prereq, node_id)
+                    else:
+                        logger.warning(f"Prevented cyclic prerequisite edge from '{prereq}' to '{node_id}'.")
+
+        # Double-check for cycles
+        try:
+            cycles = list(nx.simple_cycles(G))
+            for cycle in cycles:
+                if len(cycle) >= 2 and G.has_edge(cycle[-1], cycle[0]):
+                    G.remove_edge(cycle[-1], cycle[0])
+        except Exception as e:
+            logger.warning(f"Error handling cycles in DAG: {e}")
+
+        # Compute topological phases
+        for node_id in G.nodes():
+            G.nodes[node_id]["phase"] = 1
+
+        try:
+            topo_order = list(nx.topological_sort(G))
+        except nx.NetworkXUnfeasible:
+            logger.warning("Unfeasible DAG topology detected. Using fallback node order.")
+            topo_order = list(G.nodes())
+
+        for node_id in topo_order:
+            preds = list(G.predecessors(node_id))
+            if preds:
+                G.nodes[node_id]["phase"] = max(G.nodes[p]["phase"] for p in preds) + 1
+
+        # PHASE 6, 7 & 10: Compute Status & Dependency Propagation
+        enriched_roadmap = []
+        for node_id in topo_order:
+            node_data = G.nodes[node_id]
+            db_node = node_lookup[node_id]
+
+            # PHASE 6: Roadmap completion is STRICTLY based on db_node.id in completed_node_ids
+            is_completed = (db_node.id in completed_node_ids)
+
+            if is_completed:
+                node_data["computed_status"] = "completed"
+            else:
+                # PHASE 7: Prerequisite is met if completed node OR possessed verified skill
+                is_blocked = False
+                for p in G.predecessors(node_id):
+                    p_db_node_id = G.nodes[p]["db_node_id"]
+                    p_name_lower = G.nodes[p]["name"].lower().strip()
+                    p_is_met = (p_db_node_id in completed_node_ids) or (p_name_lower in verified_skills_lower)
+                    if not p_is_met:
+                        is_blocked = True
+                        break
+
+                if is_blocked:
+                    node_data["computed_status"] = "blocked"
+                else:
+                    current_status = node_data["db_status"]
+                    node_data["computed_status"] = current_status if current_status in ["focus", "recommended"] else "recommended"
+
+            # Build prerequisites output format for UI
+            prereqs_out = []
+            for p in G.predecessors(node_id):
+                p_db_node_id = G.nodes[p]["db_node_id"]
+                p_name_lower = G.nodes[p]["name"].lower().strip()
+                p_met = (p_db_node_id in completed_node_ids) or (p_name_lower in verified_skills_lower)
+                prereqs_out.append({
+                    "name": G.nodes[p]["name"],
+                    "met": p_met
+                })
+
+            enriched_roadmap.append({
+                "id": str(db_node.id),
+                "node_id": db_node.id,
+                "skill_id": node_id,
+                "name": node_data["name"],
+                "status": node_data["computed_status"],  # Computed runtime status for frontend
+                "impact": node_data["impact"],
+                "prerequisites": prereqs_out,
+                "reason": node_data["reason"],
+                "estimated_effort_hours": node_data["estimated_effort_hours"],
+                "phase": node_data["phase"]
+            })
+            
+        # PHASE 10: Update phase on db_nodes while preserving original recommendation status in DB
+        for node_id in G.nodes():
+            db_node = node_lookup[node_id]
+            db_node.phase = G.nodes[node_id]["phase"]
+            # Do NOT overwrite db_node.status (preserve recommendation status focus/recommended)
+        await db.commit()
+
+        # PHASE 8: Separate roadmap learning completion percentage from career readiness score
+        total_nodes = len(G.nodes)
+        completed_nodes = sum(1 for n in G.nodes.values() if n.get("computed_status") == "completed")
+        learning_completion_pct = round((completed_nodes / total_nodes) * 100, 1) if total_nodes > 0 else 0.0
+
+        # Career readiness score measures validated requirement alignment coverage
+        readiness_score = coverage_pct if profile_data["target_role"] else None
+
+        # Compute Next Best Action
+        next_action = None
+        for r_node in enriched_roadmap:
+            if r_node["status"] in ["focus", "recommended"]:
+                if next_action is None or r_node["impact"] == "high":
+                    next_action = r_node
+                    if r_node["impact"] == "high":
+                        break
+                        
         final_result = {
             "profile": profile_data,
             "skill_alignment": {
@@ -457,21 +652,14 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
                 "missing_skills": missing_skills,
                 "coverage_percentage": coverage_pct
             },
-            "prioritized_gaps": data.get("prioritized_gaps", []),
+            "prioritized_gaps": meta.get("prioritized_gaps", []),
             "learning_roadmap": enriched_roadmap,
-            "recommendations": data.get("recommendations", []),
-            "ai_synthesis": data.get("ai_synthesis")
+            "recommendations": meta.get("recommendations", []),
+            "ai_synthesis": meta.get("ai_synthesis"),
+            "readiness_score": readiness_score,
+            "learning_completion_pct": learning_completion_pct,
+            "next_best_action": next_action
         }
-
-        # Persist generated result to database cache for zero-latency subsequent fetches
-        if profile_obj:
-            profile_obj.preferences = dict(profile_obj.preferences or {})
-            profile_obj.preferences["career_intelligence_cache"] = {
-                "state_hash": state_hash,
-                "intelligence": final_result
-            }
-            db.add(profile_obj)
-            await db.commit()
 
         return final_result
 
@@ -505,7 +693,7 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
                     analysis = analyses[0]
             if analysis and isinstance(analysis, dict):
                 ats_score = analysis.get("overall_ats_score")
-                ats_gaps = [m.get("keyword") for m in analysis.get("missing_keywords", []) if m.get("keyword")]
+                ats_gaps = [m.get("keyword") for m in analysis.get("missing_keywords", []) if isinstance(m, dict) and m.get("keyword")]
 
         # 3. Interview Performance
         res_interviews = await db.execute(
@@ -516,7 +704,8 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
         interviews = list(res_interviews.scalars().all())
         completed_interviews = [i for i in interviews if i.is_completed]
         
-        avg_interview_score = 0.0
+        # PHASE 13: missing score is None, not 0.0
+        avg_interview_score = None
         scores = []
         for i in completed_interviews:
             s_score = 0.0
@@ -529,14 +718,27 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
         if scores:
             avg_interview_score = round(sum(scores) / len(scores), 1)
 
-        # 4. Applications Count
+        # 4. Applications State
         res_apps = await db.execute(select(Application).filter(Application.user_id == user_id))
         apps = list(res_apps.scalars().all())
         active_apps_count = len(apps)
 
-        # Calculate state hash to prevent duplicate LLM calls
-        state_str = f"{target_role}:{len(resumes)}:{len(completed_interviews)}:{active_apps_count}:{ats_score or 0}"
-        state_hash = hashlib.md5(state_str.encode("utf-8")).hexdigest()
+        # PHASE 12: Deterministic SHA-256 state fingerprint from ACTUAL recommendation inputs
+        resume_raw = latest_resume.raw_text if latest_resume else ""
+        resume_hash = hashlib.sha256(resume_raw.encode("utf-8")).hexdigest() if resume_raw else "no_resume"
+        ats_score_str = str(ats_score) if ats_score is not None else "none"
+        ats_gaps_str = ",".join(sorted(ats_gaps))
+        interview_score_str = str(avg_interview_score) if avg_interview_score is not None else "none"
+        app_states_str = ",".join(sorted([f"{a.company_name}:{a.status}" for a in apps]))
+        skills_list = profile.skills_json.get("skills", []) if profile and profile.skills_json and isinstance(profile.skills_json, dict) else []
+        skills_str = ",".join(sorted([str(s) for s in skills_list]))
+
+        state_str = (
+            f"role:{target_role or ''}|resume:{resume_hash}|ats_score:{ats_score_str}|"
+            f"gaps:{ats_gaps_str}|int_score:{interview_score_str}|int_count:{len(completed_interviews)}|"
+            f"apps:{app_states_str}|skills:{skills_str}"
+        )
+        state_hash = hashlib.sha256(state_str.encode("utf-8")).hexdigest()
 
         # Check preferences cache
         if profile and profile.preferences and not force_refresh:
@@ -557,10 +759,10 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
             "interview_sessions_count": len(completed_interviews),
             "average_interview_score": avg_interview_score,
             "active_applications_count": active_apps_count,
-            "skills": [s.title() for s in (profile.skills_json.get("skills", []) if profile and profile.skills_json else [])]
+            "skills": [s.title() for s in skills_list]
         }
 
-        # Safe programmatic fallbacks if API routing fails or if there is not enough data
+        # Programmatic fallbacks if API routing fails
         fallback_rec = {
             "title": "Upload Your Resume",
             "explanation": "Upload your latest resume to establish a career intelligence baseline.",
@@ -573,7 +775,7 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
         }
 
         if not latest_resume:
-            pass # Keep upload resume fallback
+            pass
         elif not target_role:
             fallback_rec = {
                 "title": "Configure Target Role",
@@ -590,7 +792,7 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
                 "title": "Complete First Mock Interview",
                 "explanation": "Trigger an AI mock session to evaluate technical response pacing and clarity.",
                 "supporting_reasons": [
-                    f"Profile is analyzed for {target_role}, but interview readiness is currently --/100.",
+                    f"Profile is analyzed for {target_role}, but interview readiness is currently unavailable.",
                     "Practicing technical responses provides immediate confidence and filler-word metrics."
                 ],
                 "expected_benefit": "Unlocks interview score trend metrics on the dashboard.",
@@ -612,7 +814,7 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
                 "title": "Consult A.C.E. Career Agent",
                 "explanation": "Explore custom market trends, company insights, and targeted strategies with A.C.E.",
                 "supporting_reasons": [
-                    f"Your profiles shows alignment with {target_role}.",
+                    f"Your profile shows alignment with {target_role}.",
                     "A.C.E. agent can help identify companies matching your tech stack."
                 ],
                 "expected_benefit": "Enables personalized company outreach plans.",
@@ -624,20 +826,15 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
             "Based strictly on the candidate's career data snapshot below, generate a high-priority, data-grounded next step recommendation.\n\n"
             f"Candidate Data Snapshot:\n{json.dumps(career_snapshot, indent=2)}\n\n"
             "Rules:\n"
-            "1. Grounding: Do not invent any achievements, scores, completed interviews, skills, or applications. If the candidate has 0 applications, do not say 'review your 5 active applications'.\n"
-            "2. Missing Data: If candidate has no target role configured or no resume uploaded, identify this missing data explicitly. Recommend setting a target role or uploading a resume.\n"
-            "3. Action Route: Provide the exact frontend destination route that maps to the action. It MUST be one of:\n"
-            "   - '/resume' (if they need to upload a resume or set their target role)\n"
-            "   - '/skills' (if they have skill gaps to learn/review)\n"
-            "   - '/interviews' (if they need to complete mock sessions or improve their interview score)\n"
-            "   - '/applications' (if they need to track/apply for jobs)\n"
-            "   - '/career' (if they need to explore options or consult the A.C.E. Agent)\n"
-            "4. Return ONLY a valid JSON object matching the JSON Schema below. No other text, no markdown block formatting (like ```json), just raw JSON.\n\n"
+            "1. Grounding: Do not invent any achievements, scores, completed interviews, skills, or applications.\n"
+            "2. Missing Data: If candidate has no target role configured or no resume uploaded, identify this missing data explicitly.\n"
+            "3. Action Route: Provide the exact frontend destination route (/resume, /skills, /interviews, /applications, /career).\n"
+            "4. Return ONLY a valid JSON object matching the JSON Schema below. No other text, no markdown code fences.\n\n"
             "JSON Schema:\n"
             "{\n"
             "  \"title\": \"The single highest-priority next action title (max 60 chars)\",\n"
             "  \"explanation\": \"A concise explanation of why this is the best current step (max 150 chars)\",\n"
-            "  \"supporting_reasons\": [\"2-3 concrete reasons based strictly on the snapshot data\"],\n"
+            "  \"supporting_reasons\": [\"2-3 concrete reasons based strictly on snapshot data\"],\n"
             "  \"expected_benefit\": \"The expected career benefit or unlocked metric (max 100 chars)\",\n"
             "  \"route\": \"/resume or /skills or /interviews or /applications or /career\"\n"
             "}"
@@ -656,7 +853,6 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
 
             rec_data = json.loads(cleaned_json)
             if isinstance(rec_data, dict) and "title" in rec_data and "route" in rec_data:
-                # Save to cache
                 if profile:
                     profile.preferences = dict(profile.preferences)
                     profile.preferences["dashboard_recommendation_cache"] = {
@@ -681,3 +877,4 @@ Return ONLY valid JSON matching this schema. Do not add markdown blocks or notes
         return fallback_rec
 
 career_intelligence_service = CareerIntelligenceService()
+

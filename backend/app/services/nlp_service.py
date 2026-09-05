@@ -129,6 +129,47 @@ class FullyDynamicNLPService:
             "algorithm": method_used
         }
 
+    async def compute_batch_semantic_similarity(
+        self, candidate_text: str, target_texts: List[str]
+    ) -> List[Dict[str, Any]]:
+        """
+        Computes vector embeddings for candidate_text ONCE and target_texts in a single batch pass.
+        Orders of magnitude faster than calling single similarity in a loop.
+        """
+        return await asyncio.to_thread(self._sync_compute_batch_semantic_similarity, candidate_text, target_texts)
+
+    def _sync_compute_batch_semantic_similarity(
+        self, candidate_text: str, target_texts: List[str]
+    ) -> List[Dict[str, Any]]:
+        if not target_texts:
+            return []
+
+        model = get_sentence_model()
+        if model != "TFIDF_FALLBACK" and model is not None:
+            cand_emb = model.encode(candidate_text, convert_to_numpy=True)
+            target_embs = model.encode(target_texts, convert_to_numpy=True)
+
+            cand_norm = np.linalg.norm(cand_emb)
+            target_norms = np.linalg.norm(target_embs, axis=1)
+
+            dot_products = np.dot(target_embs, cand_emb)
+            norm_products = target_norms * max(cand_norm, 1e-9)
+
+            cosine_scores = np.where(norm_products > 1e-9, dot_products / norm_products, 0.0)
+
+            results = []
+            for score in cosine_scores:
+                sc = float(score)
+                percentage = round(min(max(sc, 0.0), 1.0) * 100, 2)
+                results.append({
+                    "cosine_similarity_score": sc,
+                    "match_percentage": percentage,
+                    "algorithm": "SentenceTransformer (all-MiniLM-L6-v2)"
+                })
+            return results
+        else:
+            return [self._sync_compute_semantic_similarity(candidate_text, t) for t in target_texts]
+
     # --- 2. Fully Dynamic TF-IDF N-gram Keyphrase Extraction ---
     async def extract_tfidf_keyphrases(self, text: str, top_n: int = 15) -> List[Dict[str, Any]]:
         """

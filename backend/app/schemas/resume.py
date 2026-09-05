@@ -65,6 +65,7 @@ class ActionableImprovementItem(BaseModel):
     why_it_matters: str = Field(..., description="Recruiter/ATS impact rationale")
     recommendation: str = Field(..., description="Concrete improvement action")
     impact: str = Field(..., description="high, medium, or low priority impact")
+    potential_pts: Optional[str] = Field("+8 pts", description="Estimated score improvement badge, e.g. +10 pts")
 
 class RoadmapPhaseItem(BaseModel):
     title: str = Field(..., description="Goal title")
@@ -79,14 +80,21 @@ class CareerRoadmapPlan(BaseModel):
 
 class EvidenceMatrixItem(BaseModel):
     requirement: str
-    importance: str
-    source_type: str
-    evidence_strength: str
-    semantic_similarity: float
-    keyword_match: bool
-    explicit_resume_evidence: str
-    contextual_evidence: str
-    explanation: str
+    importance: Optional[str] = "normal"
+    source_type: Optional[str] = "role_inference"
+    evidence_strength: Optional[str] = "missing"
+    semantic_similarity: Optional[float] = 0.0
+    keyword_match: Optional[bool] = False
+    explicit_resume_evidence: Optional[str] = ""
+    contextual_evidence: Optional[str] = ""
+    explanation: Optional[str] = ""
+    supporting_jd_evidence: Optional[str] = ""
+    supporting_resume_evidence: Optional[str] = ""
+    evidence_reason: Optional[str] = ""
+    requirement_score: Optional[float] = 0.0
+    normalized_skill: Optional[str] = ""
+    category: Optional[str] = "technical_skill"
+    requirement_id: Optional[str] = ""
 
 class ATSAnalysisResponse(BaseModel):
     target_role: str
@@ -104,6 +112,9 @@ class ATSAnalysisResponse(BaseModel):
     status: Optional[str] = Field("success", description="Analysis status: success or analysis_unavailable")
     penalties: Optional[List[Dict[str, Any]]] = Field(default_factory=list, description="List of penalties applied")
     total_penalty: Optional[int] = Field(0, description="Sum of all penalties applied")
+    analyzed_at: Optional[str] = Field(None, description="ISO timestamp of when the analysis was generated")
+    previous_score: Optional[int] = Field(None, description="Previous ATS score for this role if re-scanned")
+    score_delta: Optional[int] = Field(None, description="Score change since last scan (+X or -X)")
 
 
 class JDCompareRequest(BaseModel):

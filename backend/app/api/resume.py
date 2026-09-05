@@ -224,7 +224,53 @@ async def get_ats_analysis(
 
     role_key = effective_role.strip().lower()
     if latest_resume.ats_analysis and role_key in latest_resume.ats_analysis:
-        return ATSAnalysisResponse(**latest_resume.ats_analysis[role_key])
+        cached_res = dict(latest_resume.ats_analysis[role_key])
+        
+        # Ensure actionable_improvements is populated with top 3-5 items
+        raw_imps = cached_res.get("actionable_improvements", [])
+        pts_pool = ["+10 pts", "+7 pts", "+5 pts"]
+        enriched_imps = []
+        for idx, imp in enumerate(raw_imps):
+            if isinstance(imp, dict):
+                p = imp.get("problem", imp.get("gap", ""))
+                rec = imp.get("recommendation", "")
+                imp_str = imp.get("impact", imp.get("importance", "medium"))
+                pts = imp.get("potential_pts", pts_pool[idx % len(pts_pool)])
+                enriched_imps.append({
+                    "problem": p,
+                    "evidence": imp.get("evidence", "Missing explicit metric evidence in work history"),
+                    "why_it_matters": imp.get("why_it_matters", f"Critical for high alignment in {effective_role} evaluations."),
+                    "recommendation": rec or f"Incorporate quantifiable business impact metrics for {effective_role}.",
+                    "impact": imp_str,
+                    "potential_pts": pts
+                })
+
+        # 2. Derive additional opportunities dynamically from real evaluated requirement & matrix gaps if missing
+        if len(enriched_imps) < 3:
+            req_matrix = cached_res.get("evidence_matrix", [])
+            gap_reqs = [r for r in req_matrix if r.get("evidence_strength") in ["missing", "weak", "partial"]]
+            for r in gap_reqs:
+                if len(enriched_imps) >= 5:
+                    break
+                prob_title = f"Strengthen {r.get('normalized_skill', r.get('requirement', ''))} Evidence"
+                if not any(prob_title.lower() in f["problem"].lower() for f in enriched_imps):
+                    g_score = r.get("requirement_score", 0.0)
+                    pts_val = max(3, int(round((100.0 - g_score) * 0.15)))
+                    imp_level = "high" if r.get("importance") == "mandatory" else "medium"
+                    enriched_imps.append({
+                        "problem": prob_title,
+                        "evidence": r.get("evidence_reason") or f"Insufficient evidence for {r.get('normalized_skill')} in resume.",
+                        "why_it_matters": f"Required for {effective_role} alignment.",
+                        "recommendation": f"Add explicit work experience or project details demonstrating {r.get('normalized_skill')} implementation.",
+                        "impact": imp_level,
+                        "potential_pts": f"+{pts_val} pts"
+                    })
+
+        cached_res["actionable_improvements"] = enriched_imps
+        if not cached_res.get("analyzed_at"):
+            cached_res["analyzed_at"] = (latest_resume.updated_at or latest_resume.created_at).isoformat() if (latest_resume.updated_at or latest_resume.created_at) else None
+
+        return ATSAnalysisResponse(**cached_res)
 
     # Fallback/Empty State: Return structured unavailable state
     unavailable_res = ats_analyzer_service._build_unavailable_response(effective_role)
@@ -280,9 +326,31 @@ async def trigger_ats_analysis(
     if analysis_res.get("status") == "success":
         if latest_resume.ats_analysis is None:
             latest_resume.ats_analysis = {}
-        latest_resume.ats_analysis[effective_role.lower()] = analysis_res
+        
+        role_key = effective_role.lower()
+        existing_analysis = latest_resume.ats_analysis.get(role_key)
+        if existing_analysis and isinstance(existing_analysis, dict):
+            prev_score = existing_analysis.get("overall_ats_score")
+            curr_score = analysis_res.get("overall_ats_score")
+            if prev_score is not None:
+                analysis_res["previous_score"] = prev_score
+                if curr_score is not None:
+                    analysis_res["score_delta"] = curr_score - prev_score
+
+        latest_resume.ats_analysis[role_key] = analysis_res
         flag_modified(latest_resume, "ats_analysis")
         db.add(latest_resume)
+
+        # Synchronize profile target_role so Skill Roadmap seamlessly uses the ATS target role
+        from app.models.user import Profile
+        res_prof = await db.execute(select(Profile).filter(Profile.user_id == current_user.id))
+        profile_obj = res_prof.scalars().first()
+        if not profile_obj:
+            profile_obj = Profile(user_id=current_user.id)
+            db.add(profile_obj)
+        profile_obj.target_role = effective_role
+        db.add(profile_obj)
+
         await db.commit()
         await db.refresh(latest_resume)
     else:

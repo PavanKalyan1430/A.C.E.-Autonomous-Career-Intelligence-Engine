@@ -2,7 +2,7 @@ import axios from 'axios'
 import { useAuthStore } from '@/store/authStore'
 
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: import.meta.env.VITE_API_URL || '/api/v1',
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -64,7 +64,7 @@ export const companyApi = {
 
 // ─── Agent ───────────────────────────────────────────────────────────────────
 export const agentApi = {
-  query: (message: string, session_id?: number) => api.post('/agent/query', { message, session_id }),
+  query: (message: string, session_id?: number, config?: any) => api.post('/agent/query', { message, session_id }, config),
   listSessions: () => api.get('/agent/sessions'),
   getSessionDetail: (id: number) => api.get(`/agent/sessions/${id}`),
   deleteSession: (id: number) => api.delete(`/agent/sessions/${id}`),
@@ -88,7 +88,8 @@ export const careerApi = {
   getProfile: () => api.get('/career/profile'),
   getIntelligence: () => api.get('/career/intelligence'),
   refresh: () => api.post('/career/refresh'),
-  toggleSkillCompletion: (skill_name: string) => api.post('/career/skills/complete', { skill_name }),
+  toggleSkillCompletion: (params: { roadmap_node_id?: number | string; skill_name?: string; completed: boolean }) =>
+    api.put('/career/skills/complete', params),
   suggestRoles: (query: string, config?: any) => api.get('/career/roles/suggest', { params: { query }, ...config }),
   searchRoles: (q: string, country?: string, config?: any) => api.get('/career/roles/search', { params: { q, country }, ...config }),
 }

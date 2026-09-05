@@ -48,6 +48,8 @@ export default function InterviewsPage() {
   const [companyName, setCompanyName] = useState('')
   const [difficulty, setDifficulty] = useState('Medium')
   const [techStack, setTechStack] = useState('')
+  const [experienceLevel, setExperienceLevel] = useState('Entry Level')
+  const [numQuestions, setNumQuestions] = useState(3)
 
   // Live session state
   const [sessionId, setSessionId] = useState<number | null>(null)
@@ -98,11 +100,13 @@ export default function InterviewsPage() {
   // start session mutation
   const startMutation = useMutation({
     mutationFn: async () => {
-      const res = await interviewApi.start({
+      const res = await (interviewApi.start as any)({
         role_title: roleTitle,
         company_name: companyName,
         tech_stack_or_jd: techStack,
-        difficulty: difficulty
+        difficulty: difficulty,
+        experience_level: experienceLevel,
+        num_questions: numQuestions
       })
       return res.data
     },
@@ -245,6 +249,24 @@ export default function InterviewsPage() {
     submitAnswerMutation.mutate(userTypedAnswer)
   }
 
+  const handleSkipQuestion = async () => {
+    if (submitAnswerMutation.isPending) return
+    if (isRecording) {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop()
+      }
+      setIsRecording(false)
+    }
+    try {
+      await submitAnswerMutation.mutateAsync("Skipped by candidate (No response provided)")
+      handleNextQuestion()
+    } catch (e) {
+      console.error("Failed to skip question:", e)
+    }
+  }
+
+
+
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 animate-fade-in text-neutral-700 dark:text-neutral-300">
       
@@ -268,50 +290,95 @@ export default function InterviewsPage() {
             <div className="space-y-4 text-xs font-semibold">
               {/* Role Title */}
               <div>
-                <label className="block text-2xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2">Target Role</label>
+                <label className="block text-2xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2">
+                  Target Role <span className="text-brand-primary font-bold">*</span>
+                </label>
                 <input 
                   type="text"
                   value={roleTitle}
                   onChange={(e) => setRoleTitle(e.target.value)}
+                  placeholder="e.g. AI Engineer, Software Engineer, Data Analyst"
                   className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-lg p-3 outline-none focus:border-brand-primary"
                 />
               </div>
 
               {/* Company */}
               <div>
-                <label className="block text-2xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2">Company</label>
+                <label className="block text-2xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2">
+                  Company <span className="text-neutral-400 font-normal lowercase">(optional)</span>
+                </label>
                 <input 
                   type="text"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="e.g. Google, Stripe (leave empty for general role focus)"
                   className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-lg p-3 outline-none focus:border-brand-primary"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Experience Level */}
+                <div>
+                  <label className="block text-2xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2">
+                    Experience Level <span className="text-brand-primary font-bold">*</span>
+                  </label>
+                  <select 
+                    value={experienceLevel}
+                    onChange={(e) => setExperienceLevel(e.target.value)}
+                    className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-lg p-3 outline-none font-semibold"
+                  >
+                    <option value="Student / Intern">Student / Intern</option>
+                    <option value="Entry Level">Entry Level (0-2 years)</option>
+                    <option value="Mid Level">Mid Level (3-5 years)</option>
+                    <option value="Senior / Lead">Senior / Lead (5+ years)</option>
+                  </select>
+                </div>
+
                 {/* Difficulty */}
                 <div>
-                  <label className="block text-2xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2">Difficulty</label>
+                  <label className="block text-2xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2">
+                    Difficulty <span className="text-brand-primary font-bold">*</span>
+                  </label>
                   <select 
                     value={difficulty}
                     onChange={(e) => setDifficulty(e.target.value)}
                     className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-lg p-3 outline-none font-semibold"
                   >
-                    <option value="Easy">Easy</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Hard">Hard</option>
+                    <option value="Easy">Easy (Fundamentals & Core Concepts)</option>
+                    <option value="Medium">Medium (Practical Scenarios & Reasoning)</option>
+                    <option value="Hard">Hard (Complex Scenarios & Trade-offs)</option>
+                    <option value="Expert">Expert (Architecture & High-Scale Systems)</option>
                   </select>
                 </div>
 
                 {/* Tech context */}
                 <div>
-                  <label className="block text-2xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2">Core Tech Stack</label>
+                  <label className="block text-2xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2">
+                    Core Tech Stack <span className="text-neutral-400 font-normal lowercase">(optional)</span>
+                  </label>
                   <input 
                     type="text"
                     value={techStack}
                     onChange={(e) => setTechStack(e.target.value)}
+                    placeholder="e.g. Python, React, PostgreSQL"
                     className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-lg p-3 outline-none focus:border-brand-primary"
                   />
+                </div>
+
+                {/* Number of Questions */}
+                <div>
+                  <label className="block text-2xs uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2">
+                    Number of Questions <span className="text-brand-primary font-bold">*</span>
+                  </label>
+                  <select 
+                    value={numQuestions}
+                    onChange={(e) => setNumQuestions(Number(e.target.value))}
+                    className="w-full bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-[#1E293B] rounded-lg p-3 outline-none font-semibold"
+                  >
+                    <option value={3}>3 Questions (Short)</option>
+                    <option value={5}>5 Questions (Standard)</option>
+                    <option value={10}>10 Questions (Full Loop)</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -319,6 +386,7 @@ export default function InterviewsPage() {
             <Button 
               fullWidth 
               loading={startMutation.isPending}
+              disabled={!roleTitle.trim()}
               icon={<Play size={16} />}
               onClick={() => startMutation.mutate()}
             >
@@ -335,11 +403,14 @@ export default function InterviewsPage() {
           {/* Header */}
           <div className="flex justify-between items-center bg-white dark:bg-[#0D1117] border border-neutral-200 dark:border-[#1E293B] p-4 rounded-xl shadow-sm">
             <div>
-              <span className="text-2xs font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest">{companyName} Interview Loop</span>
-              <h2 className="text-sm font-bold text-[#3d3d3d] dark:text-white leading-tight mt-0.5">{roleTitle} Role</h2>
+              <span className="text-2xs font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest">
+                {companyName && companyName.trim() ? `${companyName} Interview Loop` : `${roleTitle} Practice Loop`}
+              </span>
+              <h2 className="text-sm font-bold text-[#3d3d3d] dark:text-white leading-tight mt-0.5">{roleTitle} ({difficulty})</h2>
             </div>
             <Badge variant="blue">Question {currentIdx + 1} of {questions.length}</Badge>
           </div>
+
 
           {/* Core Immersive Prompt */}
           <Card className="text-center p-8 border-2 border-brand-primary/10 bg-gradient-to-br from-white to-brand-sage/5 dark:from-[#0D1117] dark:to-[#18291E]/30 relative overflow-hidden">
@@ -462,14 +533,26 @@ export default function InterviewsPage() {
           {/* Action Row */}
           <div className="flex justify-between items-center pt-2">
             <Button variant="ghost" onClick={() => setAppState('setup')}>Quit</Button>
-            <Button 
-              disabled={voicePace !== 'completed'}
-              onClick={handleNextQuestion}
-              iconRight={<ChevronRight size={16} />}
-            >
-              {currentIdx + 1 === questions.length ? 'Finish Interview' : 'Next Question'}
-            </Button>
+            <div className="flex items-center gap-3">
+              {voicePace !== 'completed' && (
+                <Button 
+                  variant="secondary"
+                  loading={submitAnswerMutation.isPending}
+                  onClick={handleSkipQuestion}
+                >
+                  Skip Question
+                </Button>
+              )}
+              <Button 
+                disabled={voicePace !== 'completed'}
+                onClick={handleNextQuestion}
+                iconRight={<ChevronRight size={16} />}
+              >
+                {currentIdx + 1 === questions.length ? 'Finish Interview' : 'Next Question'}
+              </Button>
+            </div>
           </div>
+
 
         </div>
       )}

@@ -2,9 +2,9 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 
 class KPIOverview(BaseModel):
-    career_score: int
-    job_match_percentage: int
-    interview_score: float
+    career_score: Optional[int] = None
+    job_match_percentage: Optional[int] = None
+    interview_score: Optional[float] = None
     total_interviews: int
     completed_interviews: int
     latest_interview_score: Optional[float] = None
@@ -24,7 +24,7 @@ class QuestionPerformanceItem(BaseModel):
 class InterviewAnalyticsSection(BaseModel):
     total_sessions: int
     completed_sessions: int
-    average_score: float
+    average_score: Optional[float] = None
     latest_score: Optional[float] = None
     highest_score: Optional[float] = None
     score_trend: List[ScoreTrendPoint]
@@ -88,7 +88,7 @@ class ActivityItem(BaseModel):
 class DashboardMetricsResponse(BaseModel):
     overview: KPIOverview
     funnel: Dict[str, int]
-    average_interview_score: float
+    average_interview_score: Optional[float] = None
     total_sessions: int
     interview_analytics: InterviewAnalyticsSection
     communication_analytics: CommunicationAnalyticsSection

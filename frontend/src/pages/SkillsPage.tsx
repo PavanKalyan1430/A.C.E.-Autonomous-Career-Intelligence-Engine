@@ -20,12 +20,14 @@ interface Prereq { name: string; met: boolean }
 
 interface SkillNode {
   id: string
+  node_id?: number
   name: string
   status: NodeStatus
   impact: NodeImpact
-  prereqs: Prereq[]
+  prerequisites: Prereq[]
   reason: string
-  effort: string
+  estimated_effort_hours: number
+  phase: number
 }
 
 interface GapItem {
@@ -58,93 +60,22 @@ const IMPACT_BADGE: Record<NodeImpact, { label: string; cls: string }> = {
 // ─── DAG Builder ──────────────────────────────────────────────────────────────
 function buildDAGPhases(roadmap: SkillNode[]): DAGPhase[] {
   if (!roadmap || roadmap.length === 0) return []
-
-  const unassigned = [...roadmap]
-  const phases: DAGPhase[] = []
-  const resolvedSkillNames = roadmap
-    .filter(n => n.status === 'completed')
-    .map(n => n.name)
-
-  let phaseIdx = 1
-  // Max iterations to prevent infinite loop on cyclic prereqs
-  let iterations = 0
   
-  while (unassigned.length > 0 && iterations < 10) {
-    iterations++
-    
-    // Find nodes whose unmet prereqs are all either met globally OR present in `resolvedSkillNames`
-    const currentPhaseNodes = unassigned.filter(node => {
-      const missingPrereqs = node.prereqs.filter(p => !p.met && !resolvedSkillNames.some(s => normalizeSkillMatch(s, p.name)))
-      return missingPrereqs.length === 0
-    })
-
-    if (currentPhaseNodes.length === 0) {
-      // Cyclic or unresolved dependencies exist; dump the rest into the final phase
+  // Find max phase
+  const maxPhase = Math.max(...roadmap.map(n => n.phase || 1))
+  const phases: DAGPhase[] = []
+  
+  for (let i = 1; i <= maxPhase; i++) {
+    const nodesInPhase = roadmap.filter(n => (n.phase || 1) === i)
+    if (nodesInPhase.length > 0) {
       phases.push({
-        phaseIndex: phaseIdx,
-        title: `Phase ${phaseIdx}: Advanced Specialization`,
-        nodes: [...unassigned]
+        phaseIndex: i,
+        title: i === 1 ? 'Foundational Prerequisites' : i === 2 ? 'Core Architecture' : 'Production & Scaling',
+        nodes: nodesInPhase
       })
-      break
     }
-
-    phases.push({
-      phaseIndex: phaseIdx,
-      title: `Phase ${phaseIdx}: ${phaseIdx === 1 ? 'Foundational Prerequisites' : phaseIdx === 2 ? 'Core Architecture' : 'Production & Scaling'}`,
-      nodes: currentPhaseNodes
-    })
-
-    currentPhaseNodes.forEach(n => resolvedSkillNames.push(n.name))
-    
-    // Remove assigned nodes from unassigned pool
-    currentPhaseNodes.forEach(n => {
-      const idx = unassigned.findIndex(u => u.id === n.id)
-      if (idx !== -1) unassigned.splice(idx, 1)
-    })
-    
-    phaseIdx++
   }
-
   return phases
-}
-
-// Helper to robustly match LLM skill IDs vs display names
-function normalizeSkillMatch(a: string, b: string): boolean {
-  const clean = (s: string) => s.toLowerCase().replace(/[-_]/g, ' ').trim()
-  return clean(a) === clean(b)
-}
-
-function parseRoadmap(raw: any[], verifiedSkills: string[]): SkillNode[] {
-  return (raw || []).map((n: any) => {
-    const rawStatus = (n.status || 'recommended').toLowerCase()
-    let status: NodeStatus = ['completed', 'focus', 'recommended', 'blocked'].includes(rawStatus)
-      ? (rawStatus as NodeStatus) : 'recommended'
-      
-    // 🚨 STRICT OVERRIDE: If the user manually verified this skill, force it to 'completed'
-    // This prevents DAG blocking issues if the backend LLM cache returns a stale state.
-    const isActuallyVerified = verifiedSkills.some(s => normalizeSkillMatch(s, n.name))
-    if (isActuallyVerified) {
-      status = 'completed'
-    }
-    
-    const rawImpact = (n.impact || '').toLowerCase()
-    const impact: NodeImpact = ['high', 'medium', 'low'].includes(rawImpact)
-      ? (rawImpact as NodeImpact) : 'medium'
-    return {
-      id: n.id || n.name.toLowerCase().replace(/\s+/g, '_'),
-      name: n.name,
-      status,
-      impact,
-      prereqs: (n.prerequisites || []).map((p: any) => ({
-        name: typeof p === 'string' ? p : p.name,
-        met: typeof p === 'string'
-          ? verifiedSkills.some(s => normalizeSkillMatch(s, p))
-          : !!p.met,
-      })),
-      reason: n.reason || '',
-      effort: n.estimated_effort_hours ? `${n.estimated_effort_hours}h` : '',
-    }
-  })
 }
 
 // ─── DAG Node Component ───────────────────────────────────────────────────────
@@ -158,17 +89,17 @@ const DAGNodeCard: React.FC<{
   const isBlocked = node.status === 'blocked'
   const isRecommended = node.status === 'recommended'
 
-  const baseStyles = 'relative rounded-xl border p-4 text-left transition-all duration-200 cursor-pointer min-w-[240px] flex flex-col justify-between'
+  const baseStyles = 'relative rounded-xl border p-4 text-left transition-all duration-300 cursor-pointer min-w-[240px] flex flex-col justify-between bg-white dark:bg-[#0D1117]'
   
   let stateStyles = ''
   if (isFocus) {
-    stateStyles = 'bg-brand-light/30 dark:bg-brand-primary/10 border-brand-primary/40 shadow-[0_4px_16px_rgba(51,102,89,0.06)] hover:shadow-[0_4px_20px_rgba(51,102,89,0.12)] hover:-translate-y-0.5'
+    stateStyles = 'border-brand-primary/50 shadow-[0_8px_24px_rgba(51,102,89,0.12)] hover:shadow-[0_12px_32px_rgba(51,102,89,0.2)] hover:-translate-y-1 z-10'
   } else if (isCompleted) {
-    stateStyles = 'bg-brand-primary/5 dark:bg-brand-primary/10 border-brand-primary/20 shadow-[0_2px_10px_rgba(51,102,89,0.04)] hover:shadow-[0_4px_16px_rgba(51,102,89,0.08)] hover:-translate-y-0.5'
+    stateStyles = 'border-brand-primary/20 shadow-sm hover:shadow-md hover:-translate-y-0.5 opacity-95'
   } else if (isRecommended) {
-    stateStyles = 'bg-white dark:bg-[#18291E] border-neutral-200 dark:border-neutral-800 shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-[0_4px_16px_rgba(51,102,89,0.08)] hover:border-brand-primary/30 hover:-translate-y-0.5'
+    stateStyles = 'border-neutral-200 dark:border-neutral-800 shadow-sm hover:shadow-md hover:border-brand-primary/30 hover:-translate-y-0.5'
   } else if (isBlocked) {
-    stateStyles = 'bg-neutral-50 dark:bg-neutral-900/50 border-neutral-200 dark:border-neutral-800 opacity-75 grayscale-[0.2]'
+    stateStyles = 'border-neutral-100 dark:border-neutral-800/50 bg-neutral-50/50 dark:bg-[#0D1117]/50 shadow-none opacity-50 grayscale'
   }
 
   const activeStyles = isActive 
@@ -206,10 +137,10 @@ const DAGNodeCard: React.FC<{
             {isCompleted ? 'Verified' : isFocus ? 'Current Focus' : isBlocked ? 'Blocked' : 'Recommended'}
           </span>
         </div>
-        {node.effort && (
+        {node.estimated_effort_hours && (
           <>
             <span className="text-neutral-300">·</span>
-            <span className="text-neutral-500 flex items-center gap-1"><Clock size={10}/> {node.effort}</span>
+            <span className="text-neutral-500 flex items-center gap-1"><Clock size={10}/> {node.estimated_effort_hours}h</span>
           </>
         )}
       </div>
@@ -223,7 +154,7 @@ const DiagnosticWorkspace: React.FC<{
   targetRole: string
   verifiedSkills: string[]
   navigate: ReturnType<typeof useNavigate>
-  onToggleCompletion: (skillName: string) => void
+  onToggleCompletion: (node: SkillNode, completed: boolean) => void
   isToggling: boolean
 }> = ({ skill, targetRole, navigate, onToggleCompletion, isToggling }) => {
   if (!skill) {
@@ -237,8 +168,8 @@ const DiagnosticWorkspace: React.FC<{
 
   const isCompleted = skill.status === 'completed'
   const isFocus = skill.status === 'focus'
-  const metPrereqs = skill.prereqs.filter(p => p.met)
-  const unmetPrereqs = skill.prereqs.filter(p => !p.met)
+  const metPrereqs = skill.prerequisites.filter(p => p.met)
+  const unmetPrereqs = skill.prerequisites.filter(p => !p.met)
   const impCfg = IMPACT_BADGE[skill.impact]
 
   return (
@@ -259,12 +190,12 @@ const DiagnosticWorkspace: React.FC<{
           <Button 
             size="sm" 
             variant={isCompleted ? 'secondary' : 'primary'}
-            onClick={() => onToggleCompletion(skill.name)}
+            onClick={() => onToggleCompletion(skill, !isCompleted)}
             isLoading={isToggling}
-            className={!isCompleted ? 'bg-brand-primary hover:bg-brand-hover text-white shadow-[0_2px_10px_rgba(51,102,89,0.2)]' : 'border-brand-primary/40 text-brand-primary dark:text-[#E3EFD3]'}
-            icon={<CheckCircle2 size={14} className={isCompleted ? 'text-brand-primary' : 'text-white'} />}
+            className={!isCompleted ? 'bg-brand-primary hover:bg-brand-hover text-white shadow-[0_2px_10px_rgba(51,102,89,0.2)]' : 'border-brand-primary/40 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/40 text-brand-primary dark:text-[#E3EFD3] transition-colors'}
+            icon={isCompleted ? undefined : <CheckCircle2 size={14} className="text-white" />}
           >
-            {isCompleted ? 'Marked as Completed ✓' : 'Mark as Completed'}
+            {isCompleted ? 'Revert to Incomplete ↩' : 'Mark as Completed'}
           </Button>
           <Button size="sm" variant="secondary" onClick={() => navigate('/resume', { state: { triggerUpload: true } })} icon={<BookOpen size={14} />}>
             Upload Proof
@@ -314,7 +245,7 @@ const DiagnosticWorkspace: React.FC<{
             <h4 className="text-[11px] font-bold uppercase tracking-widest text-neutral-400 mb-3 flex items-center gap-1.5">
               <Layers size={12} /> Required Prerequisites
             </h4>
-            {skill.prereqs.length === 0 ? (
+            {skill.prerequisites.length === 0 ? (
               <p className="text-xs text-neutral-500 italic">No prerequisites required. Ready to learn.</p>
             ) : (
               <div className="space-y-2">
@@ -334,11 +265,11 @@ const DiagnosticWorkspace: React.FC<{
             )}
           </section>
 
-          {skill.effort && (
+          {skill.estimated_effort_hours && (
             <section>
               <h4 className="text-[11px] font-bold uppercase tracking-widest text-neutral-400 mb-2">Estimated Effort</h4>
               <p className="text-lg font-black text-neutral-900 dark:text-white flex items-center gap-2">
-                <Clock size={16} className="text-brand-primary" /> {skill.effort}
+                <Clock size={16} className="text-brand-primary" /> {skill.estimated_effort_hours}
               </p>
             </section>
           )}
@@ -394,9 +325,11 @@ const TargetRoleSetup: React.FC<{ onCompleted: () => void }> = ({ onCompleted })
 // ─── Main SkillsPage ──────────────────────────────────────────────────────────
 export default function SkillsPage() {
   const navigate = useNavigate()
-  const { selectedSkillNodeId, setSelectedSkillNodeId } = useNavigationStore()
+  const { selectedSkillNodeId, setSelectedSkillNodeId, resetSkillRoadmapState } = useNavigationStore()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [selectedVelocity, setSelectedVelocity] = useState<number>(10)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
 
   // 1. Fetch resume
   const { data: resume, isLoading: resumeLoading } = useQuery({
@@ -421,17 +354,35 @@ export default function SkillsPage() {
   const targetRole: string = intel?.skill_alignment?.target_role || intel?.profile?.target_role || ''
   const verifiedSkills: string[] = intel?.profile?.verified_skills || []
   
-  const roadmap = useMemo(() => parseRoadmap(intel?.learning_roadmap || [], verifiedSkills), [intel?.learning_roadmap, verifiedSkills])
-  const dagPhases = useMemo(() => buildDAGPhases(roadmap), [roadmap])
-
-  const coveragePct = normalizePercentage(intel?.skill_alignment?.coverage_percentage)
+  const roadmap: SkillNode[] = useMemo(() => intel?.learning_roadmap || [], [intel?.learning_roadmap])
+  
   const completedCount = roadmap.filter(n => n.status === 'completed').length
   const remainingCount = roadmap.filter(n => n.status !== 'completed').length
-  const totalHours = roadmap.filter(n => n.status !== 'completed' && n.effort !== '').reduce((a, n) => a + (parseInt(n.effort) || 0), 0)
+  
+  // 🚨 OVERRIDE: Derive readiness STRICTLY from the mathematical reality of the generated roadmap
+  // to prevent contradictions (e.g. 100% readiness but 4 gaps left)
+  const coveragePct = intel?.readiness_score || 0
 
-  const nextFocus = roadmap.find(n => n.status === 'focus')
-    || roadmap.find(n => n.status === 'recommended' && n.impact === 'high')
-    || roadmap.find(n => n.status === 'recommended')
+  const totalHours = roadmap.filter(n => n.status !== 'completed').reduce((a, n) => a + (n.estimated_effort_hours || 0), 0)
+
+  // Apply filters to the roadmap before passing to DAG builder
+  const filteredRoadmap = useMemo(() => {
+    return roadmap.filter(n => {
+      const matchesSearch = n.name.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesStatus = statusFilter === 'all' || n.status === statusFilter
+      return matchesSearch && matchesStatus
+    })
+  }, [roadmap, searchTerm, statusFilter])
+
+  const dagPhases = useMemo(() => buildDAGPhases(filteredRoadmap), [filteredRoadmap])
+
+  const handleReset = useCallback(() => {
+    setSearchTerm('')
+    setStatusFilter('all')
+    resetSkillRoadmapState()
+  }, [resetSkillRoadmapState])
+
+  const nextFocus = intel?.next_best_action || roadmap.find(n => n.status === 'focus') || roadmap.find(n => n.status === 'recommended')
 
   const activeNode = roadmap.find(n => n.id === selectedSkillNodeId)
     || nextFocus
@@ -440,7 +391,12 @@ export default function SkillsPage() {
 
   const queryClient = useQueryClient()
   const toggleSkillMutation = useMutation({
-    mutationFn: (skillName: string) => careerApi.toggleSkillCompletion(skillName).then(r => r.data),
+    mutationFn: ({ node, completed }: { node: SkillNode; completed: boolean }) =>
+      careerApi.toggleSkillCompletion({
+        roadmap_node_id: node.node_id || node.id,
+        skill_name: node.name,
+        completed
+      }).then(r => r.data),
     onSuccess: (data) => {
       if (data?.intelligence) {
         queryClient.setQueryData(['careerIntelligence'], data.intelligence)
@@ -449,6 +405,16 @@ export default function SkillsPage() {
       queryClient.invalidateQueries({ queryKey: ['userProfile'] })
     }
   })
+
+  // Reconcile selected node if roadmap updates and selected node is no longer valid
+  React.useEffect(() => {
+    if (selectedSkillNodeId && roadmap.length > 0) {
+      const exists = roadmap.some(n => n.id === selectedSkillNodeId || String(n.node_id) === String(selectedSkillNodeId))
+      if (!exists) {
+        setSelectedSkillNodeId(null)
+      }
+    }
+  }, [roadmap, selectedSkillNodeId, setSelectedSkillNodeId])
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true)
@@ -521,8 +487,10 @@ export default function SkillsPage() {
       {/* ── 1. PAGE HEADER ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
-            Skill Roadmap
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+            <span className="bg-gradient-to-r from-[#0D2B1D] via-[#10B981] via-[#336659] to-[#047857] bg-clip-text text-transparent">
+              Skill Roadmap
+            </span>
           </h1>
           <p className="text-xs text-neutral-500 mt-1 font-medium">
             Dynamic profile alignment and prerequisite path for <span className="text-brand-primary font-bold">{targetRole}</span>
@@ -674,16 +642,33 @@ export default function SkillsPage() {
           
           {/* DAG Visual Container */}
           <div className="rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-[#0D1117] shadow-card overflow-hidden">
-            <div className="p-5 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between">
+            <div className="p-5 border-b border-neutral-100 dark:border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <Map size={18} className="text-brand-primary" />
                 <h3 className="font-bold text-sm">Your Career Roadmap</h3>
               </div>
-              <div className="flex items-center gap-3 text-[10px] font-bold text-neutral-500 uppercase">
-                <span className="flex items-center gap-1"><CheckCircle2 size={10} className="text-brand-primary"/> Completed</span>
-                <span className="flex items-center gap-1"><Zap size={10} className="text-brand-primary"/> Current Focus</span>
-                <span className="flex items-center gap-1"><Circle size={10}/> Recommended</span>
-                <span className="flex items-center gap-1"><Lock size={10}/> Blocked</span>
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Search skills..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 focus:outline-none focus:ring-1 focus:ring-brand-primary/50"
+                />
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 focus:outline-none focus:ring-1 focus:ring-brand-primary/50"
+                >
+                  <option value="all">All Status</option>
+                  <option value="completed">Completed</option>
+                  <option value="focus">Focus</option>
+                  <option value="recommended">Recommended</option>
+                  <option value="blocked">Blocked</option>
+                </select>
+                <Button size="sm" variant="secondary" onClick={handleReset} className="h-[30px] px-3 text-xs">
+                  Reset
+                </Button>
               </div>
             </div>
             
@@ -729,7 +714,7 @@ export default function SkillsPage() {
               targetRole={targetRole}
               verifiedSkills={verifiedSkills}
               navigate={navigate}
-              onToggleCompletion={(name) => toggleSkillMutation.mutate(name)}
+              onToggleCompletion={(node, completed) => toggleSkillMutation.mutate({ node, completed })}
               isToggling={toggleSkillMutation.isPending}
             />
           </div>

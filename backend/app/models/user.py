@@ -1,10 +1,12 @@
 import datetime
 import enum
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, JSON, Float
+from typing import Optional
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Integer, JSON, Float, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 class ApplicationStatus(str, enum.Enum):
+    TRACKED = "tracked"
     APPLIED = "applied"
     INTERVIEW = "interview"
     OFFER = "offer"
@@ -29,6 +31,8 @@ class User(Base):
     recommendations: Mapped[list["Recommendation"]] = relationship("Recommendation", back_populates="user", cascade="all, delete-orphan")
     executions: Mapped[list["AgentExecution"]] = relationship("AgentExecution", back_populates="user", cascade="all, delete-orphan")
     chat_sessions: Mapped[list["ChatSession"]] = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
+    learning_completions: Mapped[list["LearningCompletion"]] = relationship("LearningCompletion", back_populates="user", cascade="all, delete-orphan")
+    roadmaps: Mapped[list["Roadmap"]] = relationship("Roadmap", back_populates="user", cascade="all, delete-orphan")
 
 class Profile(Base):
     __tablename__ = "profiles"
@@ -103,9 +107,14 @@ class Application(Base):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     company_name: Mapped[str] = mapped_column(String, nullable=False)
     role_title: Mapped[str] = mapped_column(String, nullable=False)
-    status: Mapped[str] = mapped_column(String, default="applied")  # applied, interview, offer, rejected
+    status: Mapped[str] = mapped_column(String, default="tracked")  # tracked, applied, interview, offer, rejected
     jd_text: Mapped[str] = mapped_column(String, nullable=True)
     analysis: Mapped[dict] = mapped_column(JSON, nullable=True)  # Match score, skill gaps
+    external_apply_url: Mapped[str] = mapped_column(String, nullable=True)
+    location: Mapped[str] = mapped_column(String, nullable=True)
+    applied_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=True)
+    application_source: Mapped[str] = mapped_column(String, nullable=True, default="EXTERNAL_USER_CONFIRMED")
+    external_application_opened_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
     user: Mapped["User"] = relationship("User", back_populates="applications")
@@ -211,3 +220,52 @@ class ChatMessage(Base):
 
     session: Mapped["ChatSession"] = relationship("ChatSession", back_populates="messages")
 
+class LearningCompletion(Base):
+    __tablename__ = "learning_completions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "roadmap_node_id", name="uq_user_roadmap_node_completion"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    roadmap_node_id: Mapped[int] = mapped_column(Integer, ForeignKey("roadmap_nodes.id"), nullable=False, index=True)
+    skill_name: Mapped[str] = mapped_column(String, nullable=True, index=True)
+    completed_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+
+    user: Mapped["User"] = relationship("User", back_populates="learning_completions")
+    roadmap_node: Mapped["RoadmapNode"] = relationship("RoadmapNode", back_populates="completions")
+
+class Roadmap(Base):
+    __tablename__ = "roadmaps"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    target_role: Mapped[str] = mapped_column(String, nullable=False)
+    target_company: Mapped[str] = mapped_column(String, nullable=True)
+    version_hash: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    user: Mapped["User"] = relationship("User", back_populates="roadmaps")
+    nodes: Mapped[list["RoadmapNode"]] = relationship("RoadmapNode", back_populates="roadmap", cascade="all, delete-orphan")
+
+class RoadmapNode(Base):
+    __tablename__ = "roadmap_nodes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    roadmap_id: Mapped[int] = mapped_column(Integer, ForeignKey("roadmaps.id"), nullable=False, index=True)
+    skill_name: Mapped[str] = mapped_column(String, nullable=False)
+    skill_id: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, default="recommended")
+    impact: Mapped[str] = mapped_column(String, default="medium")
+    estimated_effort_hours: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    reason: Mapped[str] = mapped_column(String, nullable=True)
+    prerequisites_json: Mapped[list] = mapped_column(JSON, default=list)
+    phase: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+
+    roadmap: Mapped["Roadmap"] = relationship("Roadmap", back_populates="nodes")
+    completions: Mapped[list["LearningCompletion"]] = relationship("LearningCompletion", back_populates="roadmap_node", cascade="all, delete-orphan")

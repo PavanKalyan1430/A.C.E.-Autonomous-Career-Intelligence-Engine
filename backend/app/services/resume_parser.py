@@ -178,8 +178,8 @@ class ResumeParserService:
                     bullets.append(cleaned_line)
             if bullets:
                 work_exps.append(WorkExperience(
-                    role="Senior Developer" if "senior" in raw_text.lower() else "Software Engineer",
-                    company="Company",
+                    role=sec_lines[0] if sec_lines else "Role Not Specified",
+                    company="Company Not Specified",
                     start_date="Not Specified",
                     end_date="Present",
                     description=bullets
@@ -189,14 +189,14 @@ class ResumeParserService:
         education_list = []
         if section_texts["education"]:
             sec_lines = [l.strip() for l in section_texts["education"].split("\n") if l.strip()]
-            inst = "University"
+            inst = sec_lines[0] if sec_lines else "Education Institution"
             for line in sec_lines[:3]:
                 if any(d in line.lower() for d in ["bachelor", "b.s", "b.a", "master", "m.s", "ph.d", "degree", "university", "college"]):
                     inst = line
                     break
             education_list.append(Education(
-                degree="Bachelor of Science" if "science" in raw_text.lower() or "b.s" in raw_text.lower() else "Degree",
-                field_of_study="Computer Science" if "computer" in raw_text.lower() else "Engineering",
+                degree=sec_lines[0] if sec_lines else "Degree Not Specified",
+                field_of_study="Field Not Specified",
                 institution=inst[:100],
                 graduation_date="Not Specified"
             ))
