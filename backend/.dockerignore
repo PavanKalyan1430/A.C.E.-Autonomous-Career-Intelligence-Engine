@@ -7,3 +7,7 @@ __pycache__/
 .git
 .gitignore
 .env
+scratch/
+tests/
+*.sqlite
+*.db
