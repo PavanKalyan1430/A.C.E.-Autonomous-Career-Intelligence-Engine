@@ -854,7 +854,7 @@ Return ONLY valid JSON matching this schema. Do not add markdown code fences.
             rec_data = json.loads(cleaned_json)
             if isinstance(rec_data, dict) and "title" in rec_data and "route" in rec_data:
                 if profile:
-                    profile.preferences = dict(profile.preferences)
+                    profile.preferences = dict(profile.preferences or {})
                     profile.preferences["dashboard_recommendation_cache"] = {
                         "state_hash": state_hash,
                         "recommendation": rec_data
@@ -867,7 +867,7 @@ Return ONLY valid JSON matching this schema. Do not add markdown code fences.
 
         # Fallback to safe computed recommendation
         if profile:
-            profile.preferences = dict(profile.preferences)
+            profile.preferences = dict(profile.preferences or {})
             profile.preferences["dashboard_recommendation_cache"] = {
                 "state_hash": state_hash,
                 "recommendation": fallback_rec
