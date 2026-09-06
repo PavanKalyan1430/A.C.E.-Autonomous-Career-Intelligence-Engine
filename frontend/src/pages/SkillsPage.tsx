@@ -354,7 +354,7 @@ export default function SkillsPage() {
   const targetRole: string = intel?.skill_alignment?.target_role || intel?.profile?.target_role || ''
   const verifiedSkills: string[] = intel?.profile?.verified_skills || []
   
-  const roadmap: SkillNode[] = useMemo(() => intel?.learning_roadmap || [], [intel?.learning_roadmap])
+  const roadmap: SkillNode[] = useMemo(() => Array.isArray(intel?.learning_roadmap) ? intel.learning_roadmap : [], [intel?.learning_roadmap])
   
   const completedCount = roadmap.filter(n => n.status === 'completed').length
   const remainingCount = roadmap.filter(n => n.status !== 'completed').length

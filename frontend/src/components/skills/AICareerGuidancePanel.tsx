@@ -42,7 +42,9 @@ export const AICareerGuidancePanel: React.FC<AICareerGuidancePanelProps> = ({
   targetRole,
   coveragePercentage
 }) => {
-  const topGap = prioritizedGaps.find(g => g.priority === 'high') || prioritizedGaps[0]
+  const safeGaps = Array.isArray(prioritizedGaps) ? prioritizedGaps : []
+  const safeRecs = Array.isArray(recommendations) ? recommendations : []
+  const topGap = safeGaps.find(g => g.priority === 'high') || safeGaps[0]
 
   return (
     <div className="space-y-5">

@@ -3,7 +3,7 @@ import { useAuthStore } from '@/store/authStore'
 
 const getApiBaseUrl = (): string => {
   const envUrl = import.meta.env.VITE_API_URL
-  if (!envUrl || envUrl.includes('split-expense')) {
+  if (!envUrl) {
     return '/api/v1'
   }
   const trimmed = envUrl.trim().replace(/\/+$/, '')

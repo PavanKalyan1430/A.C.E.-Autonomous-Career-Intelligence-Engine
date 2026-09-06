@@ -27,14 +27,16 @@ export const CareerGuidancePanel: React.FC<CareerGuidancePanelProps> = ({
   learningRoadmap = [],
 }) => {
   const navigate = useNavigate()
-  const topGap = missingKeywords.find((k) => k.priority?.toLowerCase() === 'high') ?? missingKeywords[0]
+  const safeKeywords = Array.isArray(missingKeywords) ? missingKeywords : []
+  const safeRoadmap = Array.isArray(learningRoadmap) ? learningRoadmap : []
+  const topGap = safeKeywords.find((k) => k.priority?.toLowerCase() === 'high') ?? safeKeywords[0]
 
   // Collect real reasons from API only — no template strings
   const realReasons: string[] = []
   if (topGap) {
     if (topGap.where_it_matters) realReasons.push(topGap.where_it_matters)
     if (topGap.reason) realReasons.push(topGap.reason)
-    const roadmapMatch = learningRoadmap.find((n: any) =>
+    const roadmapMatch = safeRoadmap.find((n: any) =>
       n.name?.toLowerCase().includes(topGap.keyword.toLowerCase())
     )
     if (roadmapMatch?.reason) realReasons.push(roadmapMatch.reason)

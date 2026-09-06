@@ -154,7 +154,7 @@ export default function JobsPage() {
 
   // Auto-select first job on load or restore selected job from navigation store
   useEffect(() => {
-    if (discoveryData?.jobs?.length > 0) {
+    if (discoveryData?.jobs && Array.isArray(discoveryData.jobs) && discoveryData.jobs.length > 0) {
       const targetId = selectedJobId !== null ? selectedJobId : selectedJob?.id
       const found = discoveryData.jobs.find((j: any) => j.id === targetId)
       if (found) {

@@ -19,15 +19,23 @@ from sqlalchemy import text
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Verify database connection on startup
-    try:
-        import asyncio
-        async with engine.connect() as conn:
-            await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=5.0)
-            logger.info("Database connection verified successfully.")
-    except Exception as e:
-        logger.critical(f"Database connection failed on startup: {e}")
-        raise RuntimeError(f"Database connection failed: {e}")
+    # Verify database connection on startup with cold-start retries
+    import asyncio
+    connected = False
+    for attempt in range(1, 4):
+        try:
+            async with engine.connect() as conn:
+                await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=15.0)
+                logger.info(f"Database connection verified successfully (attempt {attempt}).")
+                connected = True
+                break
+        except Exception as e:
+            logger.warning(f"Database connection check attempt {attempt}/3 failed: {e}")
+            if attempt < 3:
+                await asyncio.sleep(2.0)
+
+    if not connected:
+        logger.critical("Database connection could not be established after retries on startup.")
 
     yield
 

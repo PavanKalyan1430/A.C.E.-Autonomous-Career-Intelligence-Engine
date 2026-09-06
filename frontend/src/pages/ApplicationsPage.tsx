@@ -50,13 +50,15 @@ export default function ApplicationsPage() {
   const [newStatus, setNewStatus] = useState('tracked')
 
   // 1. Fetch live applications list from database
-  const { data: applications, isLoading } = useQuery({
+  const { data: rawApplications, isLoading } = useQuery({
     queryKey: ['applicationsList'],
     queryFn: async () => {
       const res = await applicationsApi.list()
       return res.data
     }
   })
+
+  const applications = Array.isArray(rawApplications) ? rawApplications : []
 
   // 2. Mutation: Create Application
   const createMutation = useMutation({
