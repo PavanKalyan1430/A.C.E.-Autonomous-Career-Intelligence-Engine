@@ -405,10 +405,14 @@ async def get_dashboard_metrics(
         top_job_matches=top_job_matches
     )
 
-    dynamic_rec_dict = await career_intelligence_service.generate_dashboard_recommendation(
-        current_user.id, db, force_refresh=force_refresh
-    )
-    dynamic_rec = DynamicRecommendation(**dynamic_rec_dict) if dynamic_rec_dict else None
+    dynamic_rec = None
+    try:
+        dynamic_rec_dict = await career_intelligence_service.generate_dashboard_recommendation(
+            current_user.id, db, force_refresh=force_refresh
+        )
+        dynamic_rec = DynamicRecommendation(**dynamic_rec_dict) if dynamic_rec_dict else None
+    except Exception as e:
+        logger.warning(f"Could not generate dynamic recommendation for dashboard: {e}")
 
     return DashboardMetricsResponse(
         overview=overview_kpi,
