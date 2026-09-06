@@ -82,8 +82,9 @@ logger = logging.getLogger(__name__)
 async def global_exception_handler(request: Request, exc: Exception):
     if isinstance(exc, (StarletteHTTPException, RequestValidationError)):
         raise exc
-    logger.exception(f"Unhandled exception occurred: {exc}")
+    logger.exception(f"Unhandled exception occurred on {request.url.path}: {exc}")
+    import traceback
     return JSONResponse(
         status_code=500,
-        content={"detail": "An unexpected error occurred. Please contact support."},
+        content={"detail": f"Internal Server Error: {str(exc)}", "type": type(exc).__name__},
     )
