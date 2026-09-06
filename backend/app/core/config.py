@@ -37,7 +37,12 @@ class Settings(BaseSettings):
     # CORS
     BACKEND_CORS_ORIGINS: Annotated[
         List[str], BeforeValidator(parse_cors)
-    ] = ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"]
+    ] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "https://ace-career-ai.vercel.app"
+    ]
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://postgres:pavan@localhost:5432/ace"

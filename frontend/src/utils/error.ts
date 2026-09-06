@@ -3,6 +3,13 @@
  * Prevents React crash when FastAPI returns an array or object in `err.response.data.detail`.
  */
 export function formatApiError(err: any, fallbackMessage: string): string {
+  if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) {
+    return 'Server connection timed out. The server may be starting up—please try again in a moment.'
+  }
+  if (err?.message === 'Network Error') {
+    return 'Unable to connect to server. Please check your internet connection or server CORS configuration.'
+  }
+
   const detail = err?.response?.data?.detail
 
   if (!detail) {
