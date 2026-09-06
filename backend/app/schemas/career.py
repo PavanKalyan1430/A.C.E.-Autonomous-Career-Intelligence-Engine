@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 class CanonicalCandidateProfile(BaseModel):
     user_id: int
     email: str
-    target_role: str
+    target_role: Optional[str] = ""
     target_company: Optional[str] = None
     verified_skills: List[str]
     experience_summary: List[Dict[str, Any]]
@@ -13,7 +13,7 @@ class CanonicalCandidateProfile(BaseModel):
     average_interview_score: Optional[float] = None
 
 class SkillAlignment(BaseModel):
-    target_role: str
+    target_role: Optional[str] = ""
     target_company: Optional[str] = None
     matched_skills: List[str]
     missing_skills: List[str]

@@ -773,7 +773,7 @@ export default function SkillsPage() {
                 <Target size={12} className="text-brand-primary" /> Validated Priority Skill Gaps ({intel.prioritized_gaps.length})
               </h4>
               <div className="space-y-3">
-                {intel.prioritized_gaps.slice(1, 5).map((gap: GapItem, i: number) => {
+                {(Array.isArray(intel?.prioritized_gaps) ? intel.prioritized_gaps : []).slice(1, 5).map((gap: GapItem, i: number) => {
                   const impCode = (gap.priority?.toLowerCase() as NodeImpact) || 'medium'
                   return (
                     <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-100 dark:border-neutral-800">
