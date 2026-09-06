@@ -126,10 +126,13 @@ class CareerIntelligenceService:
         scores = []
         for i in completed_interviews:
             s_score = 0.0
-            if i.feedback and isinstance(i.feedback, dict):
-                s_score = float(i.feedback.get("overall_score", 0.0))
-            elif i.feedbacks:
-                s_score = float(i.feedbacks[0].overall_score)
+            try:
+                if i.feedback and isinstance(i.feedback, dict):
+                    s_score = float(i.feedback.get("overall_score", 0.0))
+                elif i.feedbacks and hasattr(i.feedbacks[0], "overall_score"):
+                    s_score = float(i.feedbacks[0].overall_score)
+            except (ValueError, TypeError):
+                s_score = 0.0
             if s_score > 0:
                 scores.append(s_score)
 
@@ -138,8 +141,12 @@ class CareerIntelligenceService:
                     if isinstance(qa, dict):
                         eval_data = qa.get("evaluation", {})
                         if isinstance(eval_data, dict):
-                            if eval_data.get("score", 100) < 70:
-                                weak_areas_set.add(eval_data.get("category", "General"))
+                            try:
+                                score_val = float(eval_data.get("score", 100))
+                                if score_val < 70:
+                                    weak_areas_set.add(str(eval_data.get("category", "General")))
+                            except (ValueError, TypeError):
+                                pass
 
         # PHASE 13: Missing score is None, not 0.0
         avg_score = round(sum(scores) / len(scores), 1) if scores else None
