@@ -36,6 +36,28 @@ async def lifespan(app: FastAPI):
 
     if not connected:
         logger.critical("Database connection could not be established after retries on startup.")
+    else:
+        try:
+            async with engine.begin() as conn:
+                # Ensure all tables exist
+                await conn.run_sync(Base.metadata.create_all)
+                # Self-healing column additions for existing production tables
+                migration_sqls = [
+                    "ALTER TABLE applications ADD COLUMN IF NOT EXISTS external_apply_url VARCHAR",
+                    "ALTER TABLE applications ADD COLUMN IF NOT EXISTS location VARCHAR",
+                    "ALTER TABLE applications ADD COLUMN IF NOT EXISTS applied_at TIMESTAMP WITHOUT TIME ZONE",
+                    "ALTER TABLE applications ADD COLUMN IF NOT EXISTS application_source VARCHAR",
+                    "ALTER TABLE applications ADD COLUMN IF NOT EXISTS external_application_opened_at TIMESTAMP WITHOUT TIME ZONE",
+                    "ALTER TABLE resumes ADD COLUMN IF NOT EXISTS ats_analysis JSON DEFAULT '{}'::json"
+                ]
+                for sql_stmt in migration_sqls:
+                    try:
+                        await conn.execute(text(sql_stmt))
+                    except Exception as col_err:
+                        logger.warning(f"Schema migration statement warning: {col_err}")
+                logger.info("Database schema migration completed successfully.")
+        except Exception as mig_err:
+            logger.error(f"Failed to execute startup schema migrations: {mig_err}")
 
     yield
 
