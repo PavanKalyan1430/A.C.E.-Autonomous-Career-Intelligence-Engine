@@ -104,13 +104,13 @@ export default function DashboardPage() {
   const overview = analytics?.overview
   const skillAnalytics = analytics?.skill_analytics
   const companyAnalytics = analytics?.company_analytics
-  const insightsList = analytics?.insights || []
-  const recommendationsList = analytics?.recommendations || []
-  const activityList = analytics?.recent_activity || []
-  const skillProgress = skillAnalytics?.skill_progress || []
-  const jobMatches = companyAnalytics?.top_job_matches || []
-  const missingSkills = skillAnalytics?.missing_skills || []
-  const weakAreas = analytics?.interview_analytics?.weak_areas || []
+  const insightsList = Array.isArray(analytics?.insights) ? analytics.insights : []
+  const recommendationsList = Array.isArray(analytics?.recommendations) ? analytics.recommendations : []
+  const activityList = Array.isArray(analytics?.recent_activity) ? analytics.recent_activity : []
+  const skillProgress = Array.isArray(skillAnalytics?.skill_progress) ? skillAnalytics.skill_progress : []
+  const jobMatches = Array.isArray(companyAnalytics?.top_job_matches) ? companyAnalytics.top_job_matches : []
+  const missingSkills = Array.isArray(skillAnalytics?.missing_skills) ? skillAnalytics.missing_skills : []
+  const weakAreas = Array.isArray(analytics?.interview_analytics?.weak_areas) ? analytics.interview_analytics.weak_areas : []
 
   // Check analysis running status
   const isAtsRunning = isAtsLoading || (isAtsFetching && !atsAnalysis)

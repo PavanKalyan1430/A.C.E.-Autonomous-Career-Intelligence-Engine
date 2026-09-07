@@ -488,7 +488,7 @@ export default function CareerPage() {
               <Skeleton className="h-9 w-full" />
               <Skeleton className="h-9 w-full" />
             </div>
-          ) : !sessions || sessions.length === 0 ? (
+          ) : !Array.isArray(sessions) || sessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
               <div className="w-8 h-8 rounded-lg bg-[#F3EFE8] flex items-center justify-center mb-2.5">
                 <MessageSquare size={14} className="text-[#6B8F71]" />
@@ -500,7 +500,7 @@ export default function CareerPage() {
               </p>
             </div>
           ) : (
-            sessions.map((session) => (
+            (Array.isArray(sessions) ? sessions : []).map((session) => (
               <div
                 key={session.id}
                 onClick={() => {
@@ -1024,12 +1024,12 @@ export default function CareerPage() {
               <Brain size={12} className="text-[#6B8F71]" /> Agent Memory
             </p>
             <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {!memories || memories.length === 0 ? (
+              {!Array.isArray(memories) || memories.length === 0 ? (
                 <p className="text-[11px] text-[#6B8F71] leading-relaxed">
                   No memories saved. Ask ACE to analyze your profile.
                 </p>
               ) : (
-                memories.slice(0, 4).map((mem: any) => (
+                (Array.isArray(memories) ? memories : []).slice(0, 4).map((mem: any) => (
                   <div
                     key={mem.id}
                     className="p-2 bg-[#E3EFD3]/50 border border-[#6B8F71]/15 rounded-lg text-[10px] font-medium text-[#1f493d] leading-normal"

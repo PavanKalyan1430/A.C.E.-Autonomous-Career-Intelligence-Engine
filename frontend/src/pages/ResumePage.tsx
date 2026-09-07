@@ -322,17 +322,17 @@ export default function ResumePage() {
       const requiredKps = analysis.required_keyphrases || careerIntel?.skill_alignment?.missing_skills || []
       const userSkills = resume?.skills || careerIntel?.profile?.verified_skills || []
 
-      const matched = userSkills.filter((s: string) =>
+      const matched = (Array.isArray(userSkills) ? userSkills : []).filter((s: string) =>
         jdText.toLowerCase().includes(s.toLowerCase())
       )
 
       setComparison({
         score: matchScore,
-        matchedSkills: matched.slice(0, 8),
-        missingSkills: requiredKps.length > 0 ? requiredKps : ['No critical gaps identified'],
+        matchedSkills: (Array.isArray(matched) ? matched : []).slice(0, 8),
+        missingSkills: Array.isArray(requiredKps) && requiredKps.length > 0 ? requiredKps : ['No critical gaps identified'],
         evidence: `Backend semantic NLP analysis computed cosine similarity against target JD requirements.`,
-        weaknesses: requiredKps.length > 0
-          ? requiredKps.map((m: string) => `Target requirement for ${m} needs explicit evidence in resume.`)
+        weaknesses: Array.isArray(requiredKps) && requiredKps.length > 0
+          ? (Array.isArray(requiredKps) ? requiredKps : []).map((m: string) => `Target requirement for ${m} needs explicit evidence in resume.`)
           : ['Profile aligns with all major job description parameters.']
       })
     },
@@ -560,8 +560,8 @@ export default function ResumePage() {
                               Retry
                             </button>
                           </div>
-                        ) : roleSuggestions.length > 0 ? (
-                          roleSuggestions.map((suggestion, idx) => (
+                        ) : Array.isArray(roleSuggestions) && roleSuggestions.length > 0 ? (
+                          (Array.isArray(roleSuggestions) ? roleSuggestions : []).map((suggestion, idx) => (
                             <div
                               key={idx}
                               className={`px-3 py-2 text-xs cursor-pointer font-medium ${idx === focusedIndex
@@ -784,7 +784,7 @@ export default function ResumePage() {
                     <div>
                       <h5 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-2">Matched Skills</h5>
                       <div className="flex flex-wrap gap-1">
-                        {comparison.matchedSkills.map((sk, i) => (
+                        {(Array.isArray(comparison.matchedSkills) ? comparison.matchedSkills : []).map((sk, i) => (
                           <Badge key={i} variant="blue" size="xs">✓ {sk}</Badge>
                         ))}
                       </div>
@@ -792,7 +792,7 @@ export default function ResumePage() {
                     <div>
                       <h5 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-2">Missing Skills</h5>
                       <div className="flex flex-wrap gap-1">
-                        {comparison.missingSkills.map((sk, i) => (
+                        {(Array.isArray(comparison.missingSkills) ? comparison.missingSkills : []).map((sk, i) => (
                           <Badge key={i} variant="warning" size="xs">{sk}</Badge>
                         ))}
                       </div>
@@ -802,7 +802,7 @@ export default function ResumePage() {
                   <div>
                     <h5 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-2">Weakness Check</h5>
                     <ul className="space-y-1.5 list-disc pl-4 text-2xs text-neutral-500 dark:text-neutral-400 font-medium">
-                      {comparison.weaknesses.map((w, i) => (
+                      {(Array.isArray(comparison.weaknesses) ? comparison.weaknesses : []).map((w, i) => (
                         <li key={i}>{w}</li>
                       ))}
                     </ul>

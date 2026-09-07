@@ -598,7 +598,7 @@ export default function JobsPage() {
             </Card>
           ) : (
             <div className="space-y-3.5">
-              {discoveryData.jobs.map((job: any) => {
+              {(Array.isArray(discoveryData?.jobs) ? discoveryData.jobs : []).map((job: any) => {
                 const badge = getMatchBadgeStyle(job.match_score)
                 const isSelected = selectedJob?.id === job.id
 
@@ -854,9 +854,9 @@ export default function JobsPage() {
                       <h4 className="text-[10px] font-extrabold text-[#336659] uppercase tracking-widest mb-2 flex items-center gap-1.5">
                         <CheckCircle size={11} /> Matched Skills ({selectedJob.matched_skills?.length || 0})
                       </h4>
-                      {selectedJob.matched_skills?.length > 0 ? (
+                      {Array.isArray(selectedJob.matched_skills) && selectedJob.matched_skills.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
-                          {selectedJob.matched_skills.map((sk: string, i: number) => (
+                          {(Array.isArray(selectedJob.matched_skills) ? selectedJob.matched_skills : []).map((sk: string, i: number) => (
                             <span key={i} className="inline-flex items-center gap-1 bg-[#E3EFD3] text-[#0D2B1D] text-[10px] font-bold px-2 py-0.5 rounded-md">
                               ✓ {sk}
                             </span>
@@ -869,11 +869,11 @@ export default function JobsPage() {
 
                     <div className="p-3.5 bg-[#AEC3B0]/15 border border-[#336659]/15 rounded-xl">
                       <h4 className="text-[10px] font-extrabold text-[#234F45] uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                        <TrendingUp size={11} /> Recommended ({selectedJob.missing_skills?.length || 0})
+                        <TrendingUp size={11} /> Recommended ({Array.isArray(selectedJob.missing_skills) ? selectedJob.missing_skills.length : 0})
                       </h4>
-                      {selectedJob.missing_skills?.length > 0 ? (
+                      {Array.isArray(selectedJob.missing_skills) && selectedJob.missing_skills.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5">
-                          {selectedJob.missing_skills.map((sk: string, i: number) => (
+                          {(Array.isArray(selectedJob.missing_skills) ? selectedJob.missing_skills : []).map((sk: string, i: number) => (
                             <span key={i} className="inline-flex items-center bg-[#AEC3B0]/30 text-[#0D2B1D] text-[10px] font-bold px-2 py-0.5 rounded-md border border-[#336659]/15">
                               {sk}
                             </span>
