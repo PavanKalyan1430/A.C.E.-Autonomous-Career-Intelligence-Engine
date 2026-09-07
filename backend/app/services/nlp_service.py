@@ -15,56 +15,32 @@ _spacy_nlp = None
 def get_sentence_model():
     global _sentence_model
     if _sentence_model is None:
-        import os
-        env = os.environ.get("ENVIRONMENT", "development").lower()
-        use_lightweight = (
-            os.environ.get("USE_LIGHTWEIGHT_NLP", "").lower() in ("true", "1")
-            or os.environ.get("RENDER", "").lower() == "true"
-            or env in ("production", "prod")
-        )
-        if use_lightweight:
-            logger.info("Memory Optimization: Using lightweight TF-IDF Vector Space Embeddings to stay well within 512MB RAM limits.")
-            _sentence_model = "TFIDF_FALLBACK"
-        else:
-            try:
-                from sentence_transformers import SentenceTransformer
-                _sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
-                logger.info("SentenceTransformer (all-MiniLM-L6-v2) loaded successfully.")
-            except Exception as e:
-                logger.warning(f"Could not load SentenceTransformer: {e}. Falling back to TF-IDF vector embeddings.")
-                _sentence_model = "TFIDF_FALLBACK"
+        try:
+            from sentence_transformers import SentenceTransformer
+            _sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
+            logger.info("SentenceTransformer (all-MiniLM-L6-v2) loaded successfully.")
+        except Exception as e:
+            logger.warning(f"Could not load SentenceTransformer: {e}.")
+            _sentence_model = None
     return _sentence_model
 
 def get_spacy_nlp():
     global _spacy_nlp
     if _spacy_nlp is None:
-        import os
-        env = os.environ.get("ENVIRONMENT", "development").lower()
-        use_lightweight = (
-            os.environ.get("USE_LIGHTWEIGHT_NLP", "").lower() in ("true", "1")
-            or os.environ.get("RENDER", "").lower() == "true"
-            or env in ("production", "prod")
-        )
         try:
             import spacy
-            if use_lightweight:
-                _spacy_nlp = spacy.blank("en")
-                if "sentencizer" not in _spacy_nlp.pipe_names:
-                    _spacy_nlp.add_pipe("sentencizer")
-                logger.info("SpaCy lightweight blank pipeline initialized (<10MB RAM).")
-            else:
+            try:
+                _spacy_nlp = spacy.load("en_core_web_sm")
+            except OSError:
                 try:
+                    import spacy.cli
+                    spacy.cli.download("en_core_web_sm")
                     _spacy_nlp = spacy.load("en_core_web_sm")
-                except OSError:
-                    try:
-                        import spacy.cli
-                        spacy.cli.download("en_core_web_sm")
-                        _spacy_nlp = spacy.load("en_core_web_sm")
-                    except Exception:
-                        _spacy_nlp = spacy.blank("en")
-                        if "sentencizer" not in _spacy_nlp.pipe_names:
-                            _spacy_nlp.add_pipe("sentencizer")
-                logger.info("SpaCy NLP pipeline loaded successfully.")
+                except Exception:
+                    _spacy_nlp = spacy.blank("en")
+                    if "sentencizer" not in _spacy_nlp.pipe_names:
+                        _spacy_nlp.add_pipe("sentencizer")
+            logger.info("SpaCy NLP pipeline loaded successfully.")
         except Exception as e:
             logger.warning(f"Could not load SpaCy NLP pipeline: {e}.")
             _spacy_nlp = None
@@ -125,7 +101,7 @@ class FullyDynamicNLPService:
     def _sync_compute_semantic_similarity(self, candidate_text: str, target_text: str) -> Dict[str, Any]:
         model = get_sentence_model()
 
-        if model != "TFIDF_FALLBACK" and model is not None:
+        if model is not None:
             emb1 = model.encode(candidate_text, convert_to_numpy=True)
             emb2 = model.encode(target_text, convert_to_numpy=True)
             
@@ -169,7 +145,7 @@ class FullyDynamicNLPService:
             return []
 
         model = get_sentence_model()
-        if model != "TFIDF_FALLBACK" and model is not None:
+        if model is not None:
             cand_emb = model.encode(candidate_text, convert_to_numpy=True)
             target_embs = model.encode(target_texts, convert_to_numpy=True)
 
