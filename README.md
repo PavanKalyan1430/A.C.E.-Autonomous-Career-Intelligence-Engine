@@ -387,7 +387,7 @@ flowchart TD
     Client[Web/Mobile Client]
     
     subgraph ACE Backend Engine
-        API[FastAPI Layer\nAuth, Validation, CORS]
+        API[FastAPI Layer<br/>Auth, Validation, CORS]
         
         subgraph Domain Services
             Resume[Resume Parser]
@@ -398,27 +398,37 @@ flowchart TD
         
         subgraph Intelligence Core
             Spacy[spaCy NER / Syntax]
-            Transformer[SentenceTransformer\nEmbeddings]
-            Graph[NetworkX\nSkill DAGs]
-            Router[LLM Router w/\nKey Rotation & Retry]
+            Transformer["SentenceTransformer Embeddings"]
+            Graph["NetworkX Skill DAGs"]
+            Router["LLM Router w/ Key Rotation & Retry"]
         end
         
-        DB[(PostgreSQL\nvia asyncpg)]
+        DB[(PostgreSQL via asyncpg)]
     end
     
     subgraph External Providers
-        Groq[Groq API\nllama-3.3-70b]
-        Gem[Gemini API\nflash models]
-        Adzuna[Adzuna\nJob Data]
+        Groq["Groq API (llama-3.3-70b)"]
+        Gem["Gemini API (flash models)"]
+        Adzuna["Adzuna Job Data"]
     end
 
     Client <--> API
-    API <--> Domain
+    API <--> Resume
+    API <--> Career
+    API <--> ATS
+    API <--> Int
     
-    Resume & Career & ATS & Int <--> Intelligence Core
+    Resume <--> Spacy
+    Resume <--> Transformer
+    Career <--> Graph
+    ATS <--> Router
+    Int <--> Router
     
     Router <--> Groq
     Router <--> Gem
     
-    Domain <--> DB
+    Resume <--> DB
+    Career <--> DB
+    ATS <--> DB
+    Int <--> DB
 ```
