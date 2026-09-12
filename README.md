@@ -1,442 +1,424 @@
-# A.C.E. — Autonomous Career Intelligence Engine
+# ACE — Autonomous Career Intelligence Engine
 
-> **A Production-Grade, Multi-Agent Career Intelligence & Real-Time Voice Mock Interview Platform**  
-> Built with **LangGraph Autonomous ReAct Reasoning**, **Groq Cloud `whisper-large-v3-turbo` SOTA In-Memory Speech Analytics**, **SentenceTransformers Dense Vector Embeddings**, **SpaCy Parts-of-Speech Action-Verb Mining**, **NetworkX Directed Graph Topological Skill DAGs**, and **Tavily Live Engineering Research**.
+ACE (Autonomous Career Intelligence Engine) is an advanced, AI-driven backend platform designed to provide highly personalized career guidance, resume analysis, and interview preparation. 
 
----
+At its core, ACE solves the problem of generic career advice by applying real Natural Language Processing (NLP), dynamic semantic similarity matching, and topological dependency graphs to candidate profiles and target roles. It transforms unstructured career data (resumes, job descriptions) into structured, actionable intelligence without relying on static keyword lists.
 
-## 📌 Master Table of Contents
-1. [Executive Overview](#1-executive-overview)
-2. [Comprehensive Problem Statement & Solution](#2-comprehensive-problem-statement--solution)
-3. [System Architecture & Workflow Diagrams](#3-system-architecture--workflow-diagrams)
-4. [Exhaustive Feature-by-Feature Deep Dive](#4-exhaustive-feature-by-feature-deep-dive)
-5. [Core Services & Technical Engine Breakdown](#5-core-services--technical-engine-breakdown)
-6. [Production Tool Suite Documentation (`app/tools/`)](#6-production-tool-suite-documentation-apptools)
-7. [Database Architecture & Schema Specs (9 SQL Tables)](#7-database-architecture--schema-specs-9-sql-tables)
-8. [Complete REST API Endpoint Directory](#8-complete-rest-api-endpoint-directory)
-9. [Architectural Design Decisions & System Trade-Offs](#9-architectural-design-decisions--system-trade-offs)
-10. [Zero-Hardcoding Guarantee & Automated Verification](#10-zero-hardcoding-guarantee--automated-verification)
-11. [Local Setup & Environment Configuration](#11-local-setup--environment-configuration)
+What makes ACE technically distinct is its fully dynamic NLP pipeline combining PyTorch-based neural embeddings (`SentenceTransformers`) with linguistic analysis (`spaCy`) and LLM orchestration (Groq/Gemini). It builds a deterministic directed acyclic graph (DAG) of required skills to calculate precise learning roadmaps.
 
----
+## Table of Contents
+- [1. System Overview](#1-system-overview)
+- [2. Backend Architecture](#2-backend-architecture)
+- [3. End-to-End System Workflow](#3-end-to-end-system-workflow)
+- [4. NLP & Intelligence Engine](#4-nlp--intelligence-engine)
+- [5. Career Intelligence Pipeline](#5-career-intelligence-pipeline)
+- [6. Job Matching & Recommendation Engine](#6-job-matching--recommendation-engine)
+- [7. Database Architecture](#7-database-architecture)
+- [8. API Architecture](#8-api-architecture)
+- [9. External APIs & AI Services](#9-external-apis--ai-services)
+- [10. API Performance & Latency](#10-api-performance--latency)
+- [11. API Call Cost / Usage Characteristics](#11-api-call-cost--usage-characteristics)
+- [12. Authentication & Security](#12-authentication--security)
+- [13. Deployment Architecture](#13-deployment-architecture)
+- [14. Docker & Container Architecture](#14-docker--container-architecture)
+- [15. Scalability & Resource Design](#15-scalability--resource-design)
+- [16. Reliability & Failure Handling](#16-reliability--failure-handling)
+- [17. Testing](#17-testing)
+- [18. Configuration & Environment Variables](#18-configuration--environment-variables)
+- [19. Request Lifecycle Examples](#19-request-lifecycle-examples)
+- [20. Engineering Decisions & Trade-offs](#20-engineering-decisions--trade-offs)
+- [21. Known Limitations](#21-known-limitations)
+- [22. Future Engineering Improvements](#22-future-engineering-improvements)
+- [23. Technology Stack](#23-technology-stack)
+- [24. Complete Architecture Diagram](#24-complete-architecture-diagram)
 
-## 🚀 1. Executive Overview
+## 1. System Overview
 
-**A.C.E. (Autonomous Career Intelligence Engine)** is an enterprise-grade AI career co-pilot that replaces scattered job search tools with an integrated, stateful platform. Instead of using separate tools to check resumes, track applications on spreadsheets, look up Glassdoor reviews, and practice interviews on standalone tools, A.C.E. connects all candidate data under a single Autonomous ReAct Agent framework.
+ACE operates as a stateless intelligence backend that ingests candidate data, processes it through specialized NLP pipelines, and orchestrates requests across external LLMs to provide structured career insights.
 
-### Core Technology Highlights
-* **LangGraph Autonomous ReAct Agent**: Stateful multi-turn reasoning loop orchestrating deterministic Python tools.
-* **Groq Cloud `whisper-large-v3-turbo` STT Engine**: Real-time voice mock interviews transcribing spoken audio in **~150ms** with zero disk audio storage (100% in-memory RAM processing).
-* **NetworkX Directed Graph Topological Skill DAGs**: Sequential prerequisite learning roadmaps calculating optimal skill acquisition paths.
-* **SentenceTransformers 384-Dim Dense Vector Embeddings**: Evaluates resume-to-job fit using Cosine Similarity to score deep semantic meaning instead of superficial keyword exact-matching.
-* **SpaCy Parts-of-Speech & Interjection Tagger**: Dependency parsing (`en_core_web_sm`) mining action verbs, quantifiable metrics, and verbal filler crutches (`INTJ`).
-* **Tavily Live Web Search API**: Dynamic real-time company research extracting engineering tech stacks and hiring trends.
-
----
-
-## ❓ 2. Comprehensive Problem Statement & Solution
-
-### The Industry Problem
-
-Modern job seekers and software engineers face a deeply fragmented, inefficient career preparation landscape:
-
-1. **Fragmented & Disjointed Tools**: Candidates are forced to juggle 4 to 5 unintegrated platforms: basic ATS checkers, Glassdoor reviews, manual spreadsheets for application tracking, and static video recorders. None of these platforms share candidate context or track historical progress over time.
-2. **Keyword-Obsessed ATS Scanners**: Legacy resume checkers rely on exact string matching. If a candidate's resume lists *"Distributed Systems"* but the job description asks for *"High-Scale Microservices"*, traditional tools report a false-negative gap even though the concepts are semantically equivalent.
-3. **Unstructured Skill Gap Lists**: When candidates miss skills required for a target role, standard tools output plain, unorganized word lists. They cannot tell the candidate **which skill to learn first** (for example: *you must learn Docker before Kubernetes, and Protocol Buffers before gRPC*).
-4. **High-Latency, Privacy-Invasive Voice Tools**: Existing mock interview platforms take 3 to 5 seconds to process speech and store audio files on disk, creating laggy, artificial calls and posing privacy risks for user voice data.
-
----
-
-### Our Engineering Solution
-
-A.C.E. addresses every bottleneck through a modern, production-grade architecture:
-
-* **Unified Stateful Agent Engine**: Connects candidate memory, resumes, application tracking, and interview history into a central hub backed by PostgreSQL and vector memory search.
-* **SentenceTransformers 384-Dim Vector Match**: Uses `SentenceTransformers` (`all-MiniLM-L6-v2`) and Cosine Similarity to evaluate deep semantic meaning rather than exact keyword matches.
-* **NetworkX Topological Skill DAG Engine**: Constructs Directed Acyclic Graphs ($\text{DAG}$) to give candidates step-by-step prerequisite roadmaps.
-* **Sub-200ms In-Memory Groq Voice Engine**: Streams spoken audio directly into server RAM buffers, transcribes via Groq Cloud (`whisper-large-v3-turbo`) in **~150ms**, and **instantly purges the bytes from RAM (`0 Disk I/O`)** for maximum privacy and zero disk overhead.
-
----
-
-## 📐 3. System Architecture & Workflow Diagrams
-
-### System Architecture Diagram
-
-```mermaid
-graph TD
-    Client[Candidate Web App / React Dashboard] <-->|REST API / Voice Stream| Gateway[FastAPI Async REST Gateway]
-
-    subgraph Core Engine Layer
-        Gateway --> Auth[Auth & Security Module]
-        Gateway --> Agent[Autonomous ReAct Agent Orchestrator]
-        Gateway --> Audio[In-Memory Audio Transcription Engine]
-        Gateway --> Analytics[SQL Date-Truncation Analytics Engine]
-    end
-
-    subgraph Autonomous Agent & Tools Layer
-        Agent <-->|ReAct Reasoning Loop| Tools[Production Tools Suite app/tools/]
-        Tools --> ResumeTools[resume_tools.py]
-        Tools --> SkillTools[skill_dag_tools.py]
-        Tools --> CompanyTools[company_tools.py]
-        Tools --> InterviewTools[interview_tools.py]
-        Tools --> MemoryTools[memory_tools.py]
-    end
-
-    subgraph Neural ML & SOTA Services Layer
-        ResumeTools <--> ST[SentenceTransformers all-MiniLM-L6-v2]
-        SkillTools <--> NX[NetworkX DiGraph Topological Engine]
-        InterviewTools <--> SpaCy[SpaCy POS & Interjection Tagger]
-        CompanyTools <--> Tavily[Tavily Live Web Search API]
-        Audio <--> Groq[Groq Cloud whisper-large-v3-turbo]
-    end
-
-    subgraph Storage Layer
-        Gateway <--> DB[(PostgreSQL / Async SQLAlchemy 2.0)]
-    end
+```text
+Client Request
+       ↓
+FastAPI Layer (Validation, Auth, Routing)
+       ↓
+Domain Services (Resume parsing, Interview execution, Job matching)
+       ↓
+NLP / AI Intelligence Layer (spaCy, SentenceTransformer, LLM Router)
+       ↓
+Database (PostgreSQL via asyncpg) & External APIs (Groq, Gemini)
+       ↓
+Structured Career Intelligence Response
 ```
 
----
+## 2. Backend Architecture
 
-### Autonomous ReAct Agent Loop Workflow
+The backend is built with **FastAPI** on **Python 3.11**, utilizing asynchronous execution for high-concurrency request handling.
+
+- **Framework**: FastAPI
+- **API Architecture**: REST-compliant modular routers (`app/api/*`).
+- **Service Layer**: Business logic and orchestrations are isolated in `app/services/` (e.g., `nlp_service.py`, `career_intelligence.py`).
+- **Schema/Validation Layer**: Strong Pydantic models in `app/schemas/` ensure strict I/O validation.
+- **Database Layer**: SQLAlchemy 2.0 (Async) interacting with PostgreSQL. Models defined in `app/models/`.
+- **Configuration**: Managed via `pydantic-settings` (`app/core/config.py`).
+- **Authentication**: JWT Bearer tokens with bcrypt password hashing.
+- **Dependency Injection**: Used extensively for DB sessions (`get_db`) and user context (`get_current_user`).
+- **Asynchronous Execution**: Native `async`/`await` throughout. CPU-bound NLP tasks are offloaded via `asyncio.to_thread`.
+- **Error Handling**: Global exception handler mapping unhandled exceptions to standardized HTTP 500 JSON responses.
+- **Startup Lifecycle**: Implements a robust `lifespan` context manager with cold-start DB retries and automated schema migrations (table column checks).
+
+### Module Architecture
+
+```text
+backend/
+├── alembic/                 # Database migrations
+├── app/
+│   ├── api/                 # FastAPI routers (auth, resume, career, etc.)
+│   ├── core/                # Config, DB engine, security, LLM router
+│   ├── models/              # SQLAlchemy ORM definitions
+│   ├── schemas/             # Pydantic validation models
+│   └── services/            # Core business logic (NLP, ATS, Career Intel)
+├── tests/                   # Pytest suite
+├── Dockerfile               # Multi-stage container definition
+└── requirements.txt         # Production dependencies
+```
+
+## 3. End-to-End System Workflow
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor Candidate
-    participant Agent as Autonomous ReAct Agent Orchestrator
-    participant LLM as Gemini LLM
-    participant Tools as Production Tool Suite
-    participant DB as PostgreSQL DB
-
-    Candidate->>Agent: "Analyze my resume for Google Backend role & start mock interview"
-    Agent->>DB: Load conversation history & candidate vector memories
-    DB-->>Agent: Multi-Turn Conversation History
-    Agent->>LLM: Pass Candidate Query + Tool Descriptions + Memory Context
+flowchart TD
+    Client[Client Request] --> Router[FastAPI Router]
+    Router --> Auth[Authentication & DI]
+    Auth --> Validation[Pydantic Validation]
+    Validation --> Service[Domain Service Layer]
     
-    loop Dynamic Thought-Action-Observation Reasoning Loop
-        LLM-->>Agent: Thought: Parse resume & compute vector similarity
-        Agent->>Tools: Invoke nlp_semantic_similarity_tool
-        Tools-->>Agent: Observation: 82% semantic match, missing [Kubernetes, gRPC]
-        LLM-->>Agent: Thought: Calculate topological learning path
-        Agent->>Tools: Invoke compute_topological_skill_gap_tool
-        Tools-->>Agent: Observation: Path = Docker -> Kubernetes -> gRPC
-        LLM-->>Agent: Thought: Search Google live tech stack
-        Agent->>Tools: Invoke search_company_intelligence_tool("Google")
-        Tools-->>Agent: Observation: Stack = Go, C++, gRPC, Envoy, Borg
-        LLM-->>Agent: Thought: Generate role-specific technical questions
-        Agent->>Tools: Invoke generate_interview_questions_tool
-        Tools-->>Agent: Observation: 3 dynamic technical interview questions
-    end
-
-    LLM-->>Agent: Final Response Formulation
-    Agent->>DB: Persist ChatSession & ChatMessage
-    Agent-->>Candidate: Return Grounded Roadmap + Interview Questions
+    Service --> NLP[NLP Engine]
+    Service --> LLM[LLM Router]
+    Service --> DB[(PostgreSQL)]
+    
+    NLP --> SpaCy[spaCy Linguistic Analysis]
+    NLP --> Embeddings[SentenceTransformer]
+    
+    LLM --> Groq[Groq API]
+    LLM --> Gemini[Gemini API]
+    
+    SpaCy --> Logic[Scoring / Matching / Graphs]
+    Embeddings --> Logic
+    Groq --> Logic
+    Gemini --> Logic
+    
+    Logic --> Response[Structured JSON Response]
 ```
 
----
-
-## 🌟 4. Exhaustive Feature-by-Feature Deep Dive
-
-### Feature 1: Multi-Format Resume Intelligence & ATS Scoring
-* **Detailed Overview**: Candidate uploaded resumes in `.pdf`, `.docx`, or `.txt` formats are parsed into structured JSON data.
-* **How It Works**:
-  1. `pypdf` and `python-docx` extract raw text streams from uploaded document bytes.
-  2. SpaCy Named Entity Recognition (`ORG`, `PRODUCT`, `DATE`) and regex patterns extract contact emails, phone numbers, and portfolio links dynamically.
-  3. `SentenceTransformers` converts candidate resume text and target job descriptions into 384-dimensional dense vector embeddings, calculating Cosine Similarity to output an accurate semantic match score without relying on keyword stuffing.
-
----
-
-### Feature 2: LangGraph Autonomous ReAct AI Agent Orchestrator
-* **Detailed Overview**: An AI assistant that handles open-ended, complex candidate requests across multiple steps using ReAct (Reasoning + Acting).
-* **How It Works**:
-  1. Implemented in `backend/app/agents/orchestrator.py` using LangGraph `create_react_agent`.
-  2. Loads multi-turn database conversation history and retrieves candidate goals or past weak areas from PostgreSQL vector memory.
-  3. Dynamically decides which feature tools to run, in what order, and how many times based on the user's intent.
-
----
-
-### Feature 3: Live Company Intelligence & Web Research Engine
-* **Detailed Overview**: Provides real-time research on target engineering companies, including their technical stack, interview stages, and active hiring trends.
-* **How It Works**:
-  1. Executes real-time web queries using the Tavily Search API.
-  2. Extracts keyphrases from search result snippets using statistical TF-IDF term frequency analysis.
-  3. Gemini LLM synthesizes raw snippets into structured, clean company insights.
-
----
-
-### Feature 4: SOTA In-Memory Groq Voice Mock Interview Studio
-* **Detailed Overview**: A real-time voice interview studio that simulates a live technical screening call.
-* **How It Works**:
-  1. The browser records candidate audio using the Web Speech API / MediaRecorder into an in-memory audio Blob.
-  2. The server streams raw audio bytes to Groq Cloud `whisper-large-v3-turbo` for sub-200ms transcription (~150ms latency).
-  3. SpaCy POS dependency parsing analyzes speech quality, counting verbal interjections (`INTJ` filler words like *um*, *uh*, *like*) and calculating speaking pace in Words Per Minute (WPM).
-  4. Evaluates response quality against the STAR method (Situation, Task, Action, Result).
-  5. **Instantly purges audio bytes from RAM (`del audio_bytes`)**, ensuring zero audio files are saved to disk.
-
----
-
-### Feature 5: NetworkX Topological Skill Prerequisite Graph Visualizer
-* **Detailed Overview**: Generates a step-by-step prerequisite learning roadmap for any missing candidate skills.
-* **How It Works**:
-  1. Builds a Directed Acyclic Graph ($\text{DAG}$) of technical skills in `NetworkX`.
-  2. Runs `nx.topological_sort` to calculate the mathematically correct learning order.
-  3. Runs `nx.shortest_path` to find the shortest learning path from the candidate's existing skills to the target skill.
-
----
-
-### Feature 6: Job Application Tracker & Real-Time Analytics Dashboard
-* **Detailed Overview**: Manages job applications across recruitment stages with real-time analytics charts.
-* **How It Works**:
-  1. Stores application pipeline states (`Applied`, `Interviewing`, `Offer`, `Rejected`) using strictly-typed Python Enums (`ApplicationStatus`).
-  2. Automatically calculates semantic vector match scores whenever a new job application is added.
-  3. Performs SQL date-truncation aggregations to output application funnel metrics and historical interview score trends over time.
-
----
-
-## 🔬 5. Core Services & Technical Engine Breakdown
-
-A.C.E.'s backend code is structured into 6 core services located in `backend/app/services/`:
-
-```
-+---------------------------------------------------------------------------------------------------+
-|                                   BACKEND CORE SERVICES SUITE                                     |
-+----------------------+--------------------+--------------------+-------------------+--------------+
-| 1. nlp_service.py    | 2. audio_service.py| 3. doc_parser.py   | 4. company_intel  | 5. resume_par|
-| Dense Embeddings     | Groq Cloud STT     | PyPDF & DOCX       | Tavily Search &   | Gemini LLM   |
-| SpaCy POS Tagger     | ~150ms Latency     | Byte Extraction    | LLM Synthesis     | Schema Parse |
-| NetworkX Skill DAG   | RAM Buffer Purge   | Encoding Fallbacks | Tech Stack Mining | Regex Extr   |
-+----------------------+--------------------+--------------------+-------------------+--------------+
+### Resume → NLP → Skills Extraction
+```mermaid
+flowchart LR
+    File[Resume PDF/DOCX] --> Extract[Text Extraction]
+    Extract --> LLM[LLM Parsing]
+    Extract --> NLP[SpaCy Linguistic Features]
+    Extract --> TFIDF[TF-IDF Keyphrase Extraction]
+    LLM --> Merge[Synthesize Structured Profile]
+    NLP --> Merge
+    TFIDF --> Merge
+    Merge --> DB[(PostgreSQL)]
 ```
 
-### 1. `nlp_service.py` (NLP & Graph ML Engine)
-* **Dense Vector Embeddings**: Uses `SentenceTransformers("all-MiniLM-L6-v2")` to generate 384-dimensional dense vectors and score Cosine Similarity.
-* **SpaCy POS Tagger**: Uses the `en_core_web_sm` pipeline to extract action verbs (`VERB`), speech filler interjections (`INTJ`), and quantifiable metric tokens (`40%`, `$150k`, `50ms`).
-* **TF-IDF Keyphrase Extractor**: Uses `scikit-learn TfidfVectorizer(ngram_range=(1,3))` for 1-, 2-, and 3-word statistical keyphrase ranking.
-* **NetworkX DAG Engine**: Directed Graph topological sorting and shortest path calculations.
+### Career Intelligence Generation
+```mermaid
+flowchart TD
+    Profile[Candidate Profile & Skills] --> Match[Target Role & Tech Stack]
+    Match --> Gaps[Skill Gap Analysis]
+    Gaps --> DAG[NetworkX Topological DAG]
+    DAG --> LLMSynthesis[LLM Career Advisor]
+    LLMSynthesis --> Output[Actionable Roadmap & Missing Skills]
+```
 
----
+## 4. NLP & Intelligence Engine
 
-### 2. `audio_service.py` (In-Memory Speech Engine)
-* **Primary STT Engine**: Groq Cloud `whisper-large-v3-turbo` delivering sub-200ms speech-to-text (~150ms latency).
-* **Fallback STT Engine**: Google Gemini 1.5 Flash Multimodal Audio API.
-* **Zero-Disk Storage**: Streams audio directly in RAM (`io.BytesIO`) and purges memory immediately after processing (`del audio_bytes`).
+The NLP pipeline is the most critical and robust component of ACE. It utilizes a fully dynamic stack with **ZERO hardcoded skill lists or static dictionaries**. 
 
----
+### NLP Stack
+- **Transformer Embeddings**: `sentence-transformers` using the `all-MiniLM-L6-v2` model running on PyTorch CPU inference.
+- **Linguistic Processing**: `spaCy` using the `en_core_web_sm` model for dependency parsing and Named Entity Recognition (NER).
+- **Statistical Extraction**: `scikit-learn` `TfidfVectorizer` for dynamic n-gram keyphrase extraction.
+- **Graph Mathematics**: `networkx` for constructing Directed Acyclic Graphs (DAGs) representing skill dependencies.
 
-### 3. `document_parser.py` (Multi-Format Document Parser)
-* **Supported Formats**: `.pdf` (`pypdf`), `.docx` (`python-docx`), `.txt` / `.md` (multi-encoding fallback).
-* **Security**: Reads document bytes safely in memory and returns sanitized plain text.
+### Operations
 
----
+**Semantic Similarity (`compute_semantic_similarity`)**:
+- **Input**: Candidate text, Target text.
+- **Processing**: Embeds both strings into 384-dimensional dense vectors using `all-MiniLM-L6-v2`. Computes exact Cosine Similarity: `(u · v) / (||u|| * ||v||)`.
+- **Fallback**: TF-IDF vector space cosine similarity if the transformer fails to load.
+- **Output**: Match percentage and algorithm identifier.
 
-### 4. `company_intelligence.py` (Web Research Service)
-* Executes live web searches via the Tavily API to extract company engineering tech stacks, interview rounds, and recent hiring news.
+**Linguistic Features (`extract_linguistic_features`)**:
+- **Input**: Raw unstructured text (e.g., Resume).
+- **Processing**: Passes text through the spaCy pipeline. Extracts `ents` (entities), `noun_chunks`, action verbs, and quantifiable impact metrics via regex.
+- **Output**: Structured dictionaries of linguistic features.
 
----
+**Dynamic Skill Gap Graph (`compute_dynamic_skill_graph_gap`)**:
+- **Input**: Candidate skills, Target Job Description.
+- **Processing**: Extracts TF-IDF keyphrases from the JD. Constructs a sequential `nx.DiGraph()`. Performs full-token set intersection to map candidate skills against required skills. Calculates Topological Sort and Shortest Paths to determine the optimal learning order.
+- **Output**: Verified skills, missing skills, topological learning order, and prerequisite learning paths.
 
-### 5. `resume_parser.py` (Resume Schema Extractor)
-* Uses Gemini LLM to parse raw resume text into structured Pydantic `ResumeSchema` models with dynamic regex fallbacks.
+## 5. Career Intelligence Pipeline
 
----
+ACE generates dynamic roadmaps by comparing validated candidate evidence against dynamic target role requirements.
 
-### 6. `memory_service.py` (Vector Memory RAG Service)
-* Stores and retrieves candidate preferences, career goals, target salaries, and weak areas from PostgreSQL vector memory.
+1. **Input Normalization**: Resume text, verified skills, weak areas (from mock interviews), and target company requirements are gathered.
+2. **Skill Alignment**: Uses Semantic Match and Token Intersection to find overlaps between the candidate and the target role stack.
+3. **Graph Construction**: A Directed Acyclic Graph (DAG) is built dynamically. Cycles are identified and removed mathematically using `nx.simple_cycles`.
+4. **LLM Synthesis**: The gap data is fed to the LLM Router (Groq/Gemini) with strict JSON schemas to generate prioritized gaps, actionable recommendations, and estimated effort.
+5. **State Hashing**: A deterministic SHA-256 fingerprint is generated based on inputs to manage caching and detect when a force refresh is needed.
+6. **Output**: Returns an enriched roadmap with computed `completed`, `blocked`, or `recommended` statuses based on the user's `LearningCompletions`.
 
----
+## 6. Job Matching & Recommendation Engine
 
-## 🛠️ 6. Production Tool Suite Documentation (`app/tools/`)
+The engine avoids naive substring matching in favor of semantic token intersections and cosine similarity.
 
-All AI agent capabilities are organized into deterministic Python tools in `backend/app/tools/`:
+- **Embedding Generation**: Transforms JDs and resumes into 384-dimensional vectors.
+- **Similarity Metrics**: Uses Cosine Similarity for global document matching (Resume vs JD).
+- **Skill Overlap**: Uses dynamic full-token subset evaluation (`cand_tokens.issubset(target_tokens)`) to prevent false positives (e.g., "py" matching "python").
+- **Roadmap Recommendations**: Missing skills are mathematically sorted via Topological Sort, ensuring candidates learn prerequisites before advanced topics.
 
-| Tool Function | File Path | Input Schema | Detailed Description | Avg Latency |
-| :--- | :--- | :--- | :--- | :--- |
-| `parse_resume_document_tool` | `app/tools/resume_tools.py` | `ResumeParseInput(raw_text)` | Ingests raw resume text and returns a structured candidate JSON schema. | ~300ms |
-| `nlp_semantic_similarity_tool` | `app/tools/resume_tools.py` | `SemanticMatchInput(resume_text, jd_text)` | Computes a 384-dimensional SentenceTransformers vector Cosine Similarity match score. | ~40ms |
-| `compute_topological_skill_gap_tool` | `app/tools/skill_dag_tools.py` | `SkillDAGInput(candidate_skills, job_desc)` | Constructs a NetworkX DAG, runs topological sort, and outputs prerequisite learning paths. | ~15ms |
-| `search_company_intelligence_tool` | `app/tools/company_tools.py` | `CompanyQueryInput(company_name)` | Executes live Tavily search and synthesizes company engineering tech stack insights. | ~800ms |
-| `generate_interview_questions_tool` | `app/tools/interview_tools.py` | `QuestionGenInput(role_title, tech_stack)` | Generates 3 role-tailored technical interview questions using Gemini LLM. | ~500ms |
-| `evaluate_star_interview_tool` | `app/tools/interview_tools.py` | `AnswerEvalInput(question, user_answer)` | Evaluates STAR structure, SpaCy POS verbs, metrics, and interjection filler words. | ~400ms |
-| `retrieve_user_memory_tool` | `app/tools/memory_tools.py` | `MemoryQueryInput(query_or_category)` | Searches PostgreSQL user vector memories for candidate goals and weak areas. | ~20ms |
+## 7. Database Architecture
 
----
+- **Engine**: PostgreSQL accessed via `asyncpg` driver.
+- **ORM**: SQLAlchemy 2.0 (Async).
+- **Pooling**: Configured with `pool_size=10`, `max_overflow=20`, `pool_recycle=300`, and `pool_pre_ping=True` to ensure resilient connections.
+- **Migrations**: Alembic handles schema evolution. Startup routines execute safe column additions.
 
-## 🗄️ 7. Database Architecture & Schema Specs (9 SQL Tables)
+### Core Models
 
-The database schema is defined using Async SQLAlchemy 2.0 in `backend/app/models/user.py`:
+| Table | Purpose | Key Relationships / Fields |
+|-------|---------|----------------------------|
+| `users` | Core authentication. | `email`, `hashed_password`, `is_active` |
+| `profiles` | Candidate metadata. | `target_role`, `skills_json` (JSON), `preferences` (JSON) |
+| `resumes` | Stores parsed CVs. | `raw_text`, `parsed_data` (JSON), `ats_analysis` (JSON) |
+| `applications`| Tracked job apps. | `role_title`, `status`, `jd_text`, `analysis` (JSON) |
+| `interview_sessions`| Mock interviews. | `questions` (JSON), `transcript` (JSON), `feedback` (JSON) |
+| `roadmaps` | Generated learning paths.| `target_role`, `version_hash` |
+| `roadmap_nodes`| Individual roadmap steps. | `skill_name`, `prerequisites_json`, `impact` |
 
 ```mermaid
 erDiagram
-    users ||--o| profiles : "has profile"
-    users ||--o{ resumes : "uploads"
-    users ||--o{ applications : "tracks"
-    users ||--o{ interview_sessions : "conducts"
-    users ||--o{ user_memories : "stores memory"
-    users ||--o{ chat_sessions : "owns chat"
-    chat_sessions ||--o{ chat_messages : "contains"
-    interview_sessions ||--o{ interview_feedbacks : "generates"
-
-    users {
-        int id PK
-        string email UK
-        string hashed_password
-        boolean is_active
-        datetime created_at
-    }
-
-    profiles {
-        int id PK
-        int user_id FK
-        string bio
-        string target_role
-        int overall_score
-        json skills_json
-    }
-
-    applications {
-        int id PK
-        int user_id FK
-        string company_name
-        string role_title
-        string status "enum: applied, interview, offer, rejected"
-        json analysis
-    }
-
-    interview_sessions {
-        int id PK
-        int user_id FK
-        string role_title
-        json questions
-        json transcript
-        boolean is_completed
-    }
-
-    user_memories {
-        int id PK
-        int user_id FK
-        string category
-        string memory_text
-        json meta_data
-    }
+    USERS ||--o| PROFILES : "has"
+    USERS ||--o{ RESUMES : "uploads"
+    USERS ||--o{ APPLICATIONS : "tracks"
+    USERS ||--o{ INTERVIEW_SESSIONS : "takes"
+    USERS ||--o{ ROADMAPS : "generates"
+    ROADMAPS ||--o{ ROADMAP_NODES : "contains"
 ```
 
-### Table Details
-1. **`users`**: Core user accounts, unique email indexes, hashed passwords, active status.
-2. **`profiles`**: User bio, target role title, minimum/maximum salary preferences, skills JSON.
-3. **`resumes`**: File names, raw document text, structured parsed JSON profiles.
-4. **`applications`**: Job applications, company names, role titles, `ApplicationStatus` Enum, vector match analysis.
-5. **`interview_sessions`**: Role title, question arrays, full QA transcript logs, completion status.
-6. **`interview_feedbacks`**: Overall interview score, strengths, weakness lists, improvement tips.
-7. **`user_memories`**: User career goals, category tags, 384-dimensional vector embedding arrays.
-8. **`chat_sessions`**: AI assistant conversation session headers and session titles.
-9. **`chat_messages`**: Individual conversation turns tagged by role (`"user"` / `"assistant"`).
+## 8. API Architecture
 
----
+The API uses FastAPI routers mounted under `/api/v1`. 
 
-## 🌐 8. Complete REST API Endpoint Directory
+### Key Endpoints (Representative)
 
-All endpoints are registered in `backend/app/main.py` under `/api/v1`:
+| Method | Endpoint | Purpose | Auth | Request | Response |
+|--------|----------|---------|------|---------|----------|
+| POST | `/api/v1/auth/register` | Create account | No | `UserCreate` | `UserResponse` |
+| POST | `/api/v1/auth/login` | Authenticate | No | `OAuth2PasswordRequestForm` | `Token` |
+| GET | `/api/v1/auth/me` | Get current user | Yes | None | `UserResponse` |
+| POST | `/api/v1/resume/upload` | Process/Parse Resume | Yes | `UploadFile` (multipart) | `ResumeSchema` |
+| GET | `/api/v1/resume/latest` | Fetch last parsed CV | Yes | None | `ResumeSchema` |
+| POST | `/api/v1/resume/ats-analysis` | Trigger ATS evaluation | Yes | `TriggerATSAnalysisRequest`| `ATSAnalysisResponse`|
+| POST | `/api/v1/resume/compare-jd` | Semantic similarity check | Yes | `JDCompareRequest` | JSON Match Data |
 
-| Router | Method | Endpoint Path | Description | Avg Latency |
-| :--- | :--- | :--- | :--- | :--- |
-| **Auth** | `POST` | `/api/v1/auth/register` | Register a new user account | ~45ms |
-| **Auth** | `POST` | `/api/v1/auth/login` | Authenticate user and receive OAuth2 JWT Token | ~40ms |
-| **Auth** | `GET` | `/api/v1/auth/me` | Retrieve currently logged-in user profile | ~15ms |
-| **Resume** | `POST` | `/api/v1/resume/upload` | Upload `.pdf`/`.docx`/`.txt` resume file and parse schema | ~450ms |
-| **Resume** | `GET` | `/api/v1/resume/me` | Fetch uploaded resumes and parsed profile | ~20ms |
-| **Company** | `GET` | `/api/v1/company/insights/{company}` | Fetch live engineering stack via Tavily & Gemini | ~850ms |
-| **Agent** | `POST` | `/api/v1/agent/query` | Ask open-ended questions to the AI Agent loop | ~1.2s |
-| **Agent** | `GET` | `/api/v1/agent/sessions` | Fetch user's past multi-turn chat sessions | ~25ms |
-| **Agent** | `GET` | `/api/v1/agent/sessions/{id}` | Fetch message history for a specific chat session | ~20ms |
-| **Memory** | `POST` | `/api/v1/memory/` | Save a candidate career goal into vector memory | ~35ms |
-| **Memory** | `GET` | `/api/v1/memory/` | Search relevant candidate vector memories | ~25ms |
-| **Interview**| `POST` | `/api/v1/interview/start` | Start a new mock interview session with LLM questions | ~600ms |
-| **Interview**| `POST` | `/api/v1/interview/submit-answer` | Submit text answer for STAR & interjection evaluation | ~350ms |
-| **Interview**| `POST` | `/api/v1/interview/audio-answer` | Stream audio blob for Groq ~150ms STT & evaluation | **~180ms** |
-| **Interview**| `POST` | `/api/v1/interview/finish` | Complete interview session and generate feedback report | ~200ms |
-| **Applications**| `POST` | `/api/v1/applications/` | Add a new tracked job application with auto match score | ~60ms |
-| **Applications**| `GET` | `/api/v1/applications/` | List job applications filtered by `ApplicationStatus` Enum | ~20ms |
-| **Applications**| `PATCH` | `/api/v1/applications/{id}`| Update job application stage using Enum | ~25ms |
-| **Applications**| `DELETE`| `/api/v1/applications/{id}`| Delete job application record | ~15ms |
-| **Analytics**| `GET` | `/api/v1/analytics/dashboard` | Fetch SQL date aggregations for application funnel & scores | ~30ms |
+*(Additional routers exist for `applications`, `career`, `jobs`, `interview`, `memory`, `analytics`, `company`, `agent`)*
 
----
+## 9. External APIs & AI Services
 
-## 🔑 9. Architectural Design Decisions & System Trade-Offs
+ACE dynamically routes LLM requests to optimize speed and cost using the `llm_router`.
 
-### 1. LangGraph Unified Autonomous ReAct Agent Topology
-* **Design Choice**: Operations like PDF parsing, vector distance scoring, and NetworkX graph sorting are deterministic Python computations. Creating separate LLM sub-agents for each operation would multiply latency by 4x, increase token costs, and introduce unnecessary failure points. Instead, A.C.E. uses a single dynamic LangGraph ReAct Autonomous Agent equipped with specialized deterministic tools.
+| Provider | Purpose | Endpoints / Models | Auth Mechanism |
+|----------|---------|--------------------|----------------|
+| **Groq** | Primary LLM Generation (Fastest) | `llama-3.3-70b-versatile` | API Key (Rotated 1-10 keys) |
+| **Gemini** | Fallback LLM / Reasoning | `gemini-2.0-flash`, `gemini-1.5-flash` | API Key |
+| **Adzuna** | External Job Data | Job search / salaries | App ID & Key |
 
-### 2. SentenceTransformers Dense Vector Matching vs. Keyword Stuffing
-* **Design Choice**: Legacy ATS checkers rely on exact string matching, which fails to recognize equivalent terms (such as *"Distributed Systems"* vs *"High-Scale Microservices"*). A.C.E. generates 384-dimensional dense vector embeddings using SentenceTransformers and calculates Cosine Similarity to evaluate actual meaning rather than keyword counts.
+*Note: Environment variables for keys include `GROQ_API_KEY` (and `GROQ_API_KEY_1` to `9`), `GEMINI_API_KEY`, `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`. Real keys are never exposed.*
 
-### 3. Groq Cloud Zero-Disk In-Memory Audio Pipeline Architecture
-* **Design Choice**: Standard voice platforms save recorded audio files to local disk, creating disk I/O bottlenecks and privacy risks. A.C.E. streams audio blobs directly into server RAM (`io.BytesIO`), sends the buffer to Groq Cloud (`whisper-large-v3-turbo`) for sub-200ms STT, and immediately purges the memory (`del audio_bytes`). Zero audio files are stored on disk.
+## 10. API Performance & Latency
 
-### 4. Zero-Hardcoding & Strict Type Safety
-* **Design Choice**: All skill keyphrases, tech stacks, and fallbacks are extracted dynamically via TF-IDF, SpaCy entity recognition, and LLM synthesis. All application pipeline statuses are enforced using strictly-typed Python Enums (`ApplicationStatus`).
+*Note: Exact latencies are heavily dependent on external LLM provider speeds and hardware execution of NLP models. The following is derived from engineering architecture and configured timeouts.*
 
----
+| Operation | Typical Cost Driver | Configured Timeout | Notes |
+|-----------|---------------------|--------------------|-------|
+| Resume Parsing | PDF Extraction + LLM Structuring + CPU NLP Inference | N/A | Offloaded to `asyncio.to_thread` for CPU bounds. |
+| ATS Analysis | Complex LLM Reasoning | `LLM_EVALUATION_TIMEOUT` (45s)| Uses `llama-3.3-70b-versatile` or Gemini fallbacks. |
+| NLP Embeddings | CPU Inference (`all-MiniLM-L6-v2`) | N/A | Models are cached globally in memory on startup. |
+| General LLM Q&A | Simple LLM Call | `LLM_QUESTION_TIMEOUT` (30s) | Fast turnaround expected via Groq. |
 
-## 🛡️ 10. Zero-Hardcoding Guarantee & Automated Verification
+## 11. API Call Cost / Usage Characteristics
 
-A.C.E. is built under strict production principles:
-1. **Zero Hardcoded Keywords**: All skills, tech stacks, and keyphrases are extracted dynamically via TF-IDF or SpaCy.
-2. **Zero Template Question Arrays**: Interview questions are generated dynamically via Gemini LLM and job description context.
-3. **Zero Static Fallback Strings**: Email, phone, and entity fallbacks use regex pattern extraction (`re.findall`) and SpaCy entity recognition (`ORG`, `PRODUCT`).
-4. **Strict Type Safety**: All application statuses use Python Enum (`ApplicationStatus`).
+- **LLM Routing**: `llm_router.py` attempts Groq first using a round-robin rotation of up to 10 keys to distribute rate limits. If Groq fails (e.g., 429), it falls back to Gemini 2.0 Flash, then Gemini 1.5 Flash.
+- **ATS Analysis**: Makes heavy LLM calls. The system persists the result in `resumes.ats_analysis` (JSON) to prevent redundant costly LLM executions.
+- **Career Intelligence**: Calculates a `version_hash` from Resume hash, target role, and verified skills. Caches the roadmap in the DB.
 
-### Automated Test Verification Suite
-Run the principal QA automation suite (`backend/tests/test_backend_suite.py`):
-```bash
-cd backend
-.\venv\Scripts\python tests/test_backend_suite.py
-```
-**Result**: `100% PASS! ZERO FLAGS FOUND ACROSS ALL BACKEND MODULES, SERVICES & DB SCHEMAS!`
+## 12. Authentication & Security
 
----
+- **JWT Authentication**: Short-lived Access tokens (default 7 days).
+- **Password Hashing**: Bcrypt (`passlib`).
+- **Authorization**: Protected routes use `Depends(get_current_user)`.
+- **Data Safety**: SQLAlchemy ORM mitigates SQL injection.
+- **Secrets Management**: Handled via `.env` and `pydantic-settings`. Enforces `SECRET_KEY` modification in production.
+- **File Upload Security**: Enforces file size limits (5 MB max), allowed extensions whitelist (`.pdf`, `.docx`, `.txt`), and sanitizes filenames (removes null bytes, extracts basename to prevent path traversal).
 
-## ⚡ 11. Local Setup & Environment Configuration
+## 13. Deployment Architecture
 
-### Prerequisites
-* Python 3.11+
-* Node.js 18+
-* PostgreSQL (Optional for production; SQLite in-memory fallback included for development)
+**Target Deployment Architecture:**
+- **Hosting**: Google Cloud Run / Render for backend.
+- **Database**: Neon / Render PostgreSQL.
+- **Containerization**: Stateless Docker container.
+- **Autoscaling**: Designed for scale-to-zero.
+- **Startup Efficiency**: The NLP models (`spaCy` en_core_web_sm, `SentenceTransformer` all-MiniLM-L6-v2) are downloaded during the Docker build process (`RUN python -m spacy...`), preventing massive multi-gigabyte downloads during container cold starts.
 
-### Environment Configuration (`backend/.env`)
-Create `backend/.env`:
-```env
-PROJECT_NAME="A.C.E. (Autonomous Career Intelligence Engine)"
-API_V1_STR="/api/v1"
-SECRET_KEY="YOUR_SUPER_SECRET_JWT_KEY"
+## 14. Docker & Container Architecture
 
-# Database
-DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5432/ace"
+The Dockerfile implements a multi-stage build:
+1. **Builder Stage**: `python:3.11-slim` installs OS build dependencies and compiles Python requirements.
+2. **Runner Stage**: Copies built dependencies. Pre-downloads ML models. Exposes `$PORT` (default 8000). Runs Alembic migrations `alembic upgrade head` sequentially before starting `uvicorn`.
 
-# AI & Search API Keys
-GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
-GROQ_API_KEY="YOUR_GROQ_API_KEY"
-TAVILY_API_KEY="YOUR_TAVILY_API_KEY"
+```mermaid
+flowchart TD
+    Source[Source Code] --> Builder[Builder Image (Compile deps)]
+    Builder --> Runner[Runner Image (Python 3.11)]
+    Runner --> Cache[Pre-download NLP Models]
+    Cache --> Init[Container Start]
+    Init --> Alembic[Alembic Migrations]
+    Alembic --> Uvicorn[Uvicorn Server]
 ```
 
-### Server Startup Commands
+## 15. Scalability & Resource Design
 
-#### 1. Start Backend FastAPI Server
-```bash
-cd backend
-.\venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+- **Stateless API**: Application state is stored in PostgreSQL, allowing horizontal scaling of the FastAPI container.
+- **Database Pressure**: Managed by SQLAlchemy connection pool (`pool_size=10`, `max_overflow=20`). Maximum DB connections = `(10 + 20) * N_Instances`.
+- **Memory Footprint**: High. Loading PyTorch, `SentenceTransformers`, and `spaCy` models requires substantial RAM. Concurrency per instance should be tuned based on available memory to prevent OOM kills.
+- **CPU Bottlenecks**: Heavy NLP tasks are properly wrapped in `asyncio.to_thread` to prevent blocking the async event loop.
+
+## 16. Reliability & Failure Handling
+
+- **Database Pre-ping**: SQLAlchemy is configured with `pool_pre_ping=True` to recover gracefully from dropped connections.
+- **Startup DB Check**: `main.py` runs a 3-attempt connection check with backoff before starting.
+- **Migration Resilience**: Startup schema checks use `IF NOT EXISTS` and isolate transactions so one failed column addition doesn't crash the startup.
+- **LLM Fallbacks**: `_execute_with_retry` implements exponential backoff. The router elegantly cascades from Groq -> Gemini 2.0 -> Gemini 1.5.
+- **Degraded States**: If Career Intelligence LLM generation fails, the system automatically falls back to a deterministic, programmatic graph representation of missing skills without faking effort estimates.
+
+## 17. Testing
+
+The repository contains a robust Pytest suite (`backend/tests/`) consisting of 22 test files.
+- **Coverage Areas**: ATS scoring (`test_ats_scoring.py`, `_arithmetic`, `_definitive`, `_hardening`), LLM Routing, Agent Orchestration, Analytics, Authentication, NLP pipeline, Resume parsing, Job matching, and Migration integrity.
+- **Purpose**: Protects business logic integrity, validates dynamic graph topology, and ensures API contracts hold under various states.
+
+## 18. Configuration & Environment Variables
+
+| Variable | Required | Purpose | Example / Format |
+|----------|----------|---------|------------------|
+| `ENVIRONMENT` | No | Target environment | `production` |
+| `SECRET_KEY` | Yes (in Prod) | JWT Signing Key | `<redacted>` |
+| `DATABASE_URL` | Yes | Asyncpg DB Connection | `postgresql+asyncpg://...` |
+| `GROQ_API_KEY` | Yes* | Primary LLM Provider | `<redacted>` |
+| `GEMINI_API_KEY` | Yes* | Fallback LLM Provider | `<redacted>` |
+| `BACKEND_CORS_ORIGINS`| No | Allowed Origins | `["https://app.com"]` |
+| `ADZUNA_APP_ID` | No | Job Search API | `<redacted>` |
+
+*(At least one LLM key is functionally required for features)*
+
+## 19. Request Lifecycle Examples
+
+### ATS Analysis Execution
+```text
+POST /api/v1/resume/ats-analysis
+↓
+Auth Middleware (JWT Validation)
+↓
+Fetch Latest Resume (PostgreSQL)
+↓
+Check Application DB for matching Job Description
+↓
+Execute ATS Analyzer (LLM Router -> Groq/Gemini)
+↓
+Process Response (Identify strengths, map evidence matrix)
+↓
+Update `resumes` table (`ats_analysis` JSON)
+↓
+Sync `profiles` table target role
+↓
+Return ATSAnalysisResponse (JSON)
 ```
-* **API Documentation**: Open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) in your browser.
 
-#### 2. Start Frontend Vite Web Application
-```bash
-cd frontend
-npm run dev
+## 20. Engineering Decisions & Trade-offs
+
+- **Async SQLAlchemy vs Sync**: Chose `asyncpg` to maximize concurrent request throughput. *Trade-off*: Adds complexity to ORM relationships (`selectinload` required).
+- **CPU NLP vs API Embeddings**: Chose local PyTorch CPU inference (`SentenceTransformer`) for embeddings. *Trade-off*: Increases container memory footprint and build time, but eliminates third-party API costs and latency for vectorization.
+- **Dynamic Graphs vs Static Skill Trees**: Chose NetworkX DAGs derived from real-time text. *Trade-off*: Computationally heavier per-request, but prevents the system from giving outdated or hallucinatory skill prerequisites.
+
+## 21. Known Limitations
+
+- **LLM Dependency**: Core features (ATS, Career Synthesis, Resume Structuring) rely entirely on external LLM availability. If Groq and Gemini rate limits are hit simultaneously, features gracefully degrade or return 503s.
+- **High Memory Base**: Python + PyTorch + spaCy requires significant container RAM, elevating minimum hosting costs.
+- **Database Migrations on Startup**: Running `alembic upgrade head` in the Docker `CMD` can cause race conditions if multiple containers scale up simultaneously in Cloud Run.
+
+## 22. Future Engineering Improvements
+
+1. **Observability**: Implement OpenTelemetry or Datadog for precise latency tracing across the LLM and NLP bounds.
+2. **Dedicated Worker Queue**: Move ATS Analysis and Resume Parsing to Celery/Redis background workers to decouple from HTTP timeouts.
+3. **Migration Locking**: Extract Alembic migrations to a separate release phase (e.g., Cloud Run jobs) rather than container startup.
+4. **Vector Database**: Migrate semantic matching from in-memory Cosine Similarity arrays to a dedicated vector store (e.g., pgvector) as candidate pools grow.
+
+## 23. Technology Stack
+
+| Layer | Technology | Purpose |
+|------|------------|---------|
+| **API Framework** | FastAPI (Python 3.11) | High-performance async REST APIs |
+| **Database** | PostgreSQL | Relational persistence |
+| **ORM / Driver** | SQLAlchemy 2.0 / `asyncpg` | Async database interaction |
+| **NLP (Linguistics)**| spaCy (`en_core_web_sm`) | NER, Noun chunks, POS tagging |
+| **NLP (Embeddings)**| SentenceTransformers | Vector representations (`all-MiniLM-L6-v2`) |
+| **ML Runtime** | PyTorch / scikit-learn | TF-IDF and Tensor math |
+| **Graph Logic** | NetworkX | Directed Acyclic Graphs for skill gaps |
+| **Containerization**| Docker | Multi-stage build |
+
+## 24. Complete Architecture Diagram
+
+```mermaid
+flowchart TD
+    Client[Web/Mobile Client]
+    
+    subgraph ACE Backend Engine
+        API[FastAPI Layer\nAuth, Validation, CORS]
+        
+        subgraph Domain Services
+            Resume[Resume Parser]
+            Career[Career Intelligence]
+            ATS[ATS Analyzer]
+            Int[Interview Engine]
+        end
+        
+        subgraph Intelligence Core
+            Spacy[spaCy NER / Syntax]
+            Transformer[SentenceTransformer\nEmbeddings]
+            Graph[NetworkX\nSkill DAGs]
+            Router[LLM Router w/\nKey Rotation & Retry]
+        end
+        
+        DB[(PostgreSQL\nvia asyncpg)]
+    end
+    
+    subgraph External Providers
+        Groq[Groq API\nllama-3.3-70b]
+        Gem[Gemini API\nflash models]
+        Adzuna[Adzuna\nJob Data]
+    end
+
+    Client <--> API
+    API <--> Domain
+    
+    Resume & Career & ATS & Int <--> Intelligence Core
+    
+    Router <--> Groq
+    Router <--> Gem
+    
+    Domain <--> DB
 ```
-* **Web App Platform**: Open [http://localhost:3000/](http://localhost:3000/) in your browser.
-
----
-
-## 📜 License & Author
-
-* **Project**: A.C.E. (Autonomous Career Intelligence Engine)
-* **License**: MIT License
